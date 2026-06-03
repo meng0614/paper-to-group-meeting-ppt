@@ -1,0 +1,4 @@
+interface:
+  display_name: "Paper to Group Meeting PPT"
+  short_description: "Generate academic group-meeting PPTs from research paper PDFs."
+  default_prompt: "Generate a simple group-meeting presentation from the provided research paper PDF, including paper understanding, cropped figures/tables/algorithms, PPTX, HTML preview, and speaker notes."
