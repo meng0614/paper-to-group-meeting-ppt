@@ -5,13 +5,23 @@ description: Generate a simple academic group-meeting presentation from one or m
 
 # Paper to Group Meeting PPT
 
-Create a research group-meeting deck from academic PDFs. The skill's core promise is:
+Create a general Academic Presentation Agent for arbitrary research papers. Do not assume a specific field such as TSN, networking, AI, medicine, biology, or systems.
+
+The skill's core promise is:
 
 ```text
-paper understanding -> evidence extraction -> polished slide layout -> speaker notes
+paper understanding -> visual evidence optimization -> academic slide design -> professor review -> refined presentation
 ```
 
 The output should be a usable first draft for a human presenter, not merely a paper summary.
+
+For higher quality, support a Generator/Discriminator adversarial refinement loop:
+
+```text
+Generator -> Reviewer/Judge -> Revision Plan -> Generator
+```
+
+The Discriminator should act like a strict senior professor with 20+ years of research experience and critique scientific accuracy, storytelling, visual quality, audience readability, group-meeting suitability, and speaker notes.
 
 ## Prefer Existing Skills When Available
 
@@ -46,9 +56,14 @@ paper_ppt_project/
   final_presentation.pptx
   final_presentation.html
   speaker_notes.md
+  runs/                    # optional iterative refinement rounds
+  final/                   # best refined deck
+  improvement_history.md
 ```
 
 ## Workflow
+
+Read `references/academic_presentation_agent.md` when the user asks for an optimized, iterative, professor-reviewed, or high-quality deck.
 
 ### 1. Paper Understanding
 
@@ -93,32 +108,57 @@ Only crop figures/tables/algorithms that are useful for the talk. Avoid full-pag
 
 ### 3. Slide Planning
 
-Generate `intermediate/slide_outline.md` first. Default single-paper structure:
+Generate `intermediate/slide_outline.md` first. Default academic structure:
 
-1. Cover
-2. What problem does the paper solve?
-3. Why is the problem difficult?
-4. Core idea in one picture
-5. System/model overview
-6. Method module 1
-7. Method module 2
-8. Algorithm or optimization process
-9. Experimental setup
-10. Main result 1
-11. Main result 2
-12. Ablation/sensitivity/comparison if available
-13. Contributions
-14. Limitations
-15. Discussion questions
+1. Title
+2. Research Background
+3. Problem Statement
+4. Motivation
+5. Challenges
+6. Key Idea
+7. System Framework / Pipeline
+8. Method Details
+9. Experimental Setup
+10. Experimental Results
+11. Discussion
+12. Limitations
+13. Future Work
+14. Takeaways
 
 For multiple papers, use: per-paper brief reading -> comparison matrix -> shared takeaways.
 
 Then create `intermediate/slide_specs.json` for deterministic rendering. Use `references/slide_spec_schema.md`.
 
+When the user wants a compact 10-slide group-meeting structure, use:
+
+```powershell
+python scripts/create_10_slide_spec_template.py --project paper_ppt_project --lang zh
+```
+
+This creates a starter `intermediate/slide_specs.json` with:
+
+1. title/authors/affiliations;
+2. background and motivation;
+3. core research problem;
+4. existing method limitations;
+5. proposed method overview;
+6. core algorithm/mechanism;
+7. experimental design;
+8. experimental results;
+9. contributions;
+10. limitations and future work.
+
 ### 4. Slide Design
 
-Use restrained academic design:
+Use restrained academic design. Respect `style` in `slide_specs.json` when present:
 
+- primary color default `#2563EB`;
+- accent color default `#DC2626`;
+- neutral color default `#6B7280`;
+- title font default `Arial`;
+- body font default `Arial`;
+- title size 28-36 pt;
+- body size 18-24 pt;
 - assertion headlines;
 - 16:9 layout;
 - white or very light gray content slides;
@@ -128,6 +168,8 @@ Use restrained academic design:
 - algorithm slides: keep pseudocode large and readable;
 - result slides: enlarge plots first, then add interpretation text;
 - do not over-decorate.
+
+Each slide should keep one visual center. Avoid text walls, multi-figure collage, and complex tables.
 
 If `baoyu-slide-deck` or another mature design skill is available and the user wants highly polished visual slides, use it after generating the slide outline and evidence files.
 
@@ -155,6 +197,38 @@ Each slide must have notes. Notes should not simply repeat bullets. Include:
 - one likely question or caveat when useful;
 - source provenance.
 
+### 7. Optional Generator/Discriminator Refinement Loop
+
+When the user asks for iterative improvement, professor-style review, adversarial review, or a more polished final deck, run a generator-reviewer loop.
+
+Read these references when deeper guidance is needed:
+
+- `references/generator_discriminator_loop.md`
+- `references/academic_presentation_agent.md`
+- `references/refinement_loop.md`
+- `references/reviewer_rubric.md`
+
+Use:
+
+```powershell
+python scripts/refine_presentation_loop.py --project paper_ppt_project --rounds 3 --target-score 8.5
+```
+
+The loop creates:
+
+- `runs/round_01/`, `runs/round_02/`, ...
+- `reviewer_report.json`
+- `reviewer_report.md`
+- `revision_plan.md`
+- `final/final_presentation.pptx`
+- `final/final_presentation.html`
+- `final/speaker_notes.md`
+- `improvement_history.md`
+
+The bundled script provides deterministic structural review and automatic cleanup revisions. For true expert review, act as the reviewer yourself: inspect `paper_analysis.md`, `figures_index.md`, `slide_specs.json`, and `final_presentation.html`; then write sharper revision tasks before the next generator pass.
+
+Run 3-5 rounds by default. Stop earlier if all key scores reach 9/10, if the user is satisfied, or if the score no longer improves.
+
 ## Quality Gates
 
 Before final response, verify:
@@ -164,6 +238,7 @@ Before final response, verify:
 - all cropped visuals have source paper/page in `figures_index.md`;
 - slide text is not a wall of text;
 - speaker notes exist for every slide;
+- if refinement was requested, `reviewer_report.md`, `revision_plan.md`, and `improvement_history.md` exist;
 - final response includes absolute paths to PPTX, HTML, and notes.
 
 ## Failure Handling

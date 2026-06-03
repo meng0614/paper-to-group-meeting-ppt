@@ -8,6 +8,18 @@ from PIL import Image
 
 EMU_W, EMU_H = 12192000, 6858000
 
+DEFAULT_STYLE = {
+    "primary_color": "2563EB",
+    "accent_color": "DC2626",
+    "neutral_color": "6B7280",
+    "title_font": "Arial",
+    "body_font": "Arial",
+    "title_size": 32,
+    "body_size": 20,
+    "layout": "auto",
+    "animation": "disable",
+}
+
 
 def esc(s):
     return html.escape(str(s), quote=True)
@@ -29,13 +41,23 @@ class ShapeIds:
         return self.n
 
 
-def text_box(ids, x, y, w, h, text, size=20, color="222831", bold=False, fill=None):
+def normalize_style(spec):
+    style = dict(DEFAULT_STYLE)
+    style.update(spec.get("style", {}) or {})
+    for key in ["primary_color", "accent_color", "neutral_color"]:
+        style[key] = str(style[key]).strip().lstrip("#").upper()
+    style["title_size"] = max(24, min(40, int(style.get("title_size", 32))))
+    style["body_size"] = max(16, min(26, int(style.get("body_size", 20))))
+    return style
+
+
+def text_box(ids, x, y, w, h, text, size=20, color="222831", bold=False, fill=None, font="Arial"):
     paras = []
     for line in str(text).split("\n"):
         paras.append(
             f'<a:p><a:r><a:rPr lang="zh-CN" sz="{int(size*100)}" b="{1 if bold else 0}">'
-            f'<a:solidFill><a:srgbClr val="{color}"/></a:solidFill><a:latin typeface="Microsoft YaHei"/>'
-            f'<a:ea typeface="Microsoft YaHei"/></a:rPr><a:t>{esc(line)}</a:t></a:r></a:p>'
+            f'<a:solidFill><a:srgbClr val="{color}"/></a:solidFill><a:latin typeface="{esc(font)}"/>'
+            f'<a:ea typeface="{esc(font)}"/></a:rPr><a:t>{esc(line)}</a:t></a:r></a:p>'
         )
     fill_xml = f'<a:solidFill><a:srgbClr val="{fill}"/></a:solidFill>' if fill else '<a:noFill/>'
     sid = ids.next()
@@ -47,13 +69,13 @@ def text_box(ids, x, y, w, h, text, size=20, color="222831", bold=False, fill=No
     </p:sp>"""
 
 
-def bullets(ids, x, y, w, h, items, size=17, color="222831"):
+def bullets(ids, x, y, w, h, items, size=17, color="222831", font="Arial"):
     paras = []
     for b in items or []:
         paras.append(
             f'<a:p><a:pPr marL="260000" indent="-160000"><a:buChar char="•"/></a:pPr>'
             f'<a:r><a:rPr lang="zh-CN" sz="{int(size*100)}"><a:solidFill><a:srgbClr val="{color}"/></a:solidFill>'
-            f'<a:latin typeface="Microsoft YaHei"/><a:ea typeface="Microsoft YaHei"/></a:rPr><a:t>{esc(b)}</a:t></a:r></a:p>'
+            f'<a:latin typeface="{esc(font)}"/><a:ea typeface="{esc(font)}"/></a:rPr><a:t>{esc(b)}</a:t></a:r></a:p>'
         )
     sid = ids.next()
     return f"""
@@ -74,7 +96,7 @@ def pic(ids, x, y, w, h, rid="rId2"):
     </p:pic>"""
 
 
-def table_shapes(ids, table):
+def table_shapes(ids, table, style):
     cols = table.get("columns", [])
     rows = table.get("rows", [])
     if not cols:
@@ -85,24 +107,27 @@ def table_shapes(ids, table):
     row_h = 560000
     out = []
     for j, c in enumerate(cols):
-        out.append(text_box(ids, x0 + j * col_w, y0, col_w, row_h, c, size=13, color="FFFFFF", bold=True, fill="12355B"))
+        out.append(text_box(ids, x0 + j * col_w, y0, col_w, row_h, c, size=13, color="FFFFFF", bold=True, fill=style["primary_color"], font=style["title_font"]))
     for i, row in enumerate(rows, 1):
         fill = "F4F6F8" if i % 2 else "FFFFFF"
         for j, c in enumerate(row):
-            out.append(text_box(ids, x0 + j * col_w, y0 + i * row_h, col_w, row_h, c, size=11.5, fill=fill))
+            out.append(text_box(ids, x0 + j * col_w, y0 + i * row_h, col_w, row_h, c, size=11.5, fill=fill, font=style["body_font"]))
     return "".join(out)
 
 
-def slide_xml(slide, idx, out_dir):
+def slide_xml(slide, idx, out_dir, style):
     ids = ShapeIds()
     kind = slide.get("kind", "content")
     dark = kind in {"cover", "section", "closing"}
-    bg = "12355B" if dark else "FFFFFF"
+    bg = style["primary_color"] if dark else "FFFFFF"
     title_color = "FFFFFF" if dark else "12355B"
+    title_color = "FFFFFF" if dark else style["primary_color"]
     body_color = "FFFFFF" if dark else "222831"
-    shapes = [text_box(ids, 520000, 330000, 11100000, 560000, slide.get("title", f"Slide {idx}"), size=26 if dark else 22, color=title_color, bold=True)]
+    title_size = style["title_size"] if not dark else max(28, style["title_size"] - 2)
+    body_size = style["body_size"]
+    shapes = [text_box(ids, 520000, 330000, 11100000, 560000, slide.get("title", f"Slide {idx}"), size=title_size, color=title_color, bold=True, font=style["title_font"])]
     if slide.get("subtitle"):
-        shapes.append(text_box(ids, 620000, 930000, 10000000, 420000, slide["subtitle"], size=15, color="DDEAF3" if dark else "6B7280"))
+        shapes.append(text_box(ids, 620000, 930000, 10000000, 420000, slide["subtitle"], size=max(14, body_size - 3), color="DDEAF3" if dark else style["neutral_color"], font=style["body_font"]))
     image = slide.get("image")
     table = slide.get("table")
     if image:
@@ -112,20 +137,20 @@ def slide_xml(slide, idx, out_dir):
         if kind in {"result"} or aspect > 1.55:
             x, y, w, h = fit_image(img_path, 750000, 1100000, 10700000, 3900000)
             shapes.append(pic(ids, x, y, w, h))
-            shapes.append(bullets(ids, 900000, 5150000, 10000000, 850000, slide.get("bullets", []), size=14.5, color=body_color))
+            shapes.append(bullets(ids, 900000, 5150000, 10000000, 850000, slide.get("bullets", []), size=max(14, body_size - 4), color=body_color, font=style["body_font"]))
         elif kind in {"algorithm"} or aspect < 0.85:
-            shapes.append(bullets(ids, 650000, 1300000, 5000000, 4200000, slide.get("bullets", []), size=16, color=body_color))
+            shapes.append(bullets(ids, 650000, 1300000, 5000000, 4200000, slide.get("bullets", []), size=max(15, body_size - 3), color=body_color, font=style["body_font"]))
             x, y, w, h = fit_image(img_path, 6600000, 1000000, 4400000, 5550000)
             shapes.append(pic(ids, x, y, w, h))
         else:
-            shapes.append(bullets(ids, 650000, 1300000, 4300000, 4200000, slide.get("bullets", []), size=16, color=body_color))
+            shapes.append(bullets(ids, 650000, 1300000, 4300000, 4200000, slide.get("bullets", []), size=max(15, body_size - 3), color=body_color, font=style["body_font"]))
             x, y, w, h = fit_image(img_path, 5550000, 1000000, 6100000, 5400000)
             shapes.append(pic(ids, x, y, w, h))
     elif table:
-        shapes.append(table_shapes(ids, table))
+        shapes.append(table_shapes(ids, table, style))
     else:
-        shapes.append(bullets(ids, 900000, 1450000, 10100000, 4200000, slide.get("bullets", []), size=19 if not dark else 18, color=body_color))
-    shapes.append(text_box(ids, 720000, 6350000, 6000000, 240000, f"Slide {idx}", size=9.5, color="DDEAF3" if dark else "6B7280"))
+        shapes.append(bullets(ids, 900000, 1450000, 10100000, 4200000, slide.get("bullets", []), size=max(17, body_size - (1 if not dark else 2)), color=body_color, font=style["body_font"]))
+    shapes.append(text_box(ids, 720000, 6350000, 6000000, 240000, f"Slide {idx}", size=9.5, color="DDEAF3" if dark else style["neutral_color"], font=style["body_font"]))
     return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
   <p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="{bg}"/></a:solidFill></p:bgPr></p:bg>
@@ -138,6 +163,7 @@ def slide_xml(slide, idx, out_dir):
 
 def build(spec, out_dir):
     slides = spec["slides"]
+    style = normalize_style(spec)
     pptx = out_dir / "final_presentation.pptx"
     image_paths = []
     for s in slides:
@@ -164,7 +190,7 @@ def build(spec, out_dir):
         for p, name in media.items():
             z.write(p, f"ppt/media/{name}")
         for i, slide in enumerate(slides, 1):
-            z.writestr(f"ppt/slides/slide{i}.xml", slide_xml(slide, i, out_dir))
+            z.writestr(f"ppt/slides/slide{i}.xml", slide_xml(slide, i, out_dir, style))
             sr = ['<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>']
             if slide.get("image"):
                 sr.append(f'<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/{media[(out_dir / slide["image"]).resolve()]}"/>')
