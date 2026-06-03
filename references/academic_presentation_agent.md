@@ -14,6 +14,65 @@ The deck should help an audience quickly understand:
 
 The goal is not to compress the paper. The goal is to create a clear group-meeting explanation.
 
+Use **Presentation-first / Visual-first** thinking. For every slide, first answer:
+
+```text
+Page Goal:
+What should the audience understand if they see this slide for only 5 seconds?
+
+Visual:
+What visual form best conveys that goal?
+
+Content:
+What minimal text is needed to support the visual?
+```
+
+The slide should be generated only after this storyboard is clear.
+
+## Slide Architect
+
+Before rendering slides, add a Slide Architect pass.
+
+The Slide Architect decides:
+
+- how many slides the talk needs;
+- how much content each slide can safely carry;
+- which layout is appropriate for each slide.
+
+Principle:
+
+```text
+Prefer more slides over dense slides.
+Do not fix overload by shrinking fonts.
+```
+
+If a section is complex, split it:
+
+- Method -> Method Overview / Method Details / Method Example
+- Experiment -> Experimental Setup / Experimental Results / Experimental Analysis
+- Result -> Main Result / Result Analysis / So What
+
+## Layout Validator
+
+Before final output, automatically check:
+
+1. Text Overflow
+2. Text Overlap
+3. Image Overlap
+4. Chart Overflow
+5. Object Collision
+6. Font Readability
+7. Content Overload
+
+If any check fails, repair in this order:
+
+1. Split pages.
+2. Adjust layout.
+3. Simplify content.
+4. Adjust font size only as a last resort.
+
+The final deck must include `layout_check_report.md`.
+
 ## Generator
 
 Inputs:
@@ -47,6 +106,49 @@ Rules:
 - Do not pile up long equations.
 - Do not directly screenshot complex tables.
 - Prefer diagrams, workflows, comparisons, and key takeaways.
+- Avoid text-only Background, Problem, Method, Algorithm, Experiment, and Result slides.
+- For algorithm slides, redraw pseudocode as a decision flow, state transition, or module relation.
+- For result slides, redraw or simplify charts when possible and annotate the "So What?".
+
+## Visual-first Slide Types
+
+Background:
+
+- Use application scenario, system architecture, industry schematic, statistics, or typical-case visual.
+- Visual area should be at least 40% of the slide.
+
+Problem Statement:
+
+- Use Existing vs Paper Setting comparison, bottleneck, mismatch, or constraint conflict.
+- Do not merely list problems.
+
+Method:
+
+- Use framework, pipeline, workflow, or architecture diagram.
+- The audience should understand the method overview in 30 seconds.
+
+Algorithm:
+
+- Use flowchart, decision process, state transition, or module relationship.
+- Do not directly paste pseudocode unless the user explicitly asks.
+
+Experiment:
+
+- Show validation logic: setup -> baselines -> metrics -> claim.
+- Avoid dense parameter tables as the main visual.
+
+Results:
+
+- Keep the core trend.
+- Remove irrelevant curves.
+- Mark best result and key improvement percentage.
+- Every chart must answer "So What?".
+
+Takeaways:
+
+- State maximum contribution.
+- State maximum novelty.
+- State maximum limitation.
 
 ## Visual Optimizer
 
@@ -96,6 +198,7 @@ Default style:
 
 Layouts:
 
+- `visual-first`: choose comparison/pipeline/flow/result visual before text;
 - `single-center`: one central visual or statement;
 - `left-right`: bullets left, visual right;
 - `figure-first`: enlarged figure with short interpretation;

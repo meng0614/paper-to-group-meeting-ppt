@@ -1,16 +1,16 @@
-# Paper to Group Meeting PPT
+# Paper to Group Meeting Presentation Agent
 
-Generate a high-quality academic group-meeting presentation from a research paper PDF.
+Generate a high-quality academic group-meeting HTML report and editable PowerPoint deck from a research paper PDF.
 
 This skill is a general Academic Presentation Agent. It is not tied to any specific discipline. It can be used for systems, networking, AI, medicine, biology, social science, and other academic papers.
 
 The workflow:
 
 ```text
-paper understanding -> visual evidence optimization -> slide design -> professor review -> refined presentation
+paper understanding -> visual storyboard -> section architect -> visualizer -> HTML report + editable PPTX -> layout/figure validators -> professor review -> refined outputs
 ```
 
-It does not only summarize a paper. It helps an AI agent read the paper, extract useful visual evidence such as figures, tables, algorithms, and result plots, design an academic slide deck, and produce speaker notes for a group meeting or journal-club style presentation.
+It does not only summarize a paper. The default strategy is **Presentation-first / Visual-first**: every section starts with Page Goal, Visual, and Content. The report should help someone who has not read the paper understand the motivation, problem, core idea, why it works, and whether experiments support it in 10-15 minutes.
 
 It supports a Generator/Discriminator refinement loop:
 
@@ -38,10 +38,15 @@ paper_ppt_project/
     paper_analysis.md
     figures_index.md
     slide_outline.md
+    visual_storyboard.md
     slide_specs.json
     source_map.md
-  final_presentation.pptx
+  final_presentation_generated.html
   final_presentation.html
+  final_presentation_generated.pptx
+  final_presentation.pptx
+  layout_check_report.md
+  figure_quality_report.md
   speaker_notes.md
   runs/
   final/
@@ -52,19 +57,36 @@ paper_ppt_project/
 ## Skill Capabilities
 
 - Understand the paper structure: problem, motivation, method, experiments, results, limitations.
+- Create a visual storyboard with Page Goal / Visual / Content for every slide.
+- Plan slide count and page capacity with a Slide Architect before rendering.
 - Extract and crop useful visual evidence from PDFs.
+- Redraw or simplify selected visuals as comparisons, pipelines, flows, and result bars.
+- Validate layout before final output: text overflow, object collision, chart overflow, image overlap, and font readability.
 - Avoid full-page screenshots unless explicitly requested.
-- Generate editable PPTX from a slide specification.
-- Generate HTML preview and speaker notes.
+- Generate a polished academic HTML report from a section specification.
+- Generate an editable PPTX deck from the same section specification. Text, diagrams, result bars, and callouts are PowerPoint objects; the PPTX is not an HTML screenshot.
+- Support MathJax formulas, pseudocode, foldable long text, scrollable tables, and dynamic result bars.
+- Generate speaker notes.
+- Rotate among figure-first, left-right, top-visual, flow, comparison, and result-focus layouts to avoid repetitive pages.
+- Check cropped figures for low resolution, likely incomplete crops, excessive whitespace, blur, and low contrast.
 - Coordinate with existing paper-reading and slide-design skills when available.
+- Optionally use external figure extraction backends such as PDFFigures2, GROBID, PyMuPDF, or LayoutParser when installed. See `references/figure_extraction_backends.md`.
 
 ## Included Scripts
 
 ```text
-scripts/render_pdf_pages.py       Render PDF pages to PNG with pdftoppm.
-scripts/crop_pdf_regions.py       Crop figures/tables/algorithms from rendered pages.
+scripts/render_pdf_pages.py       Render PDF pages to PNG with pdftoppm at PPT-readable DPI.
+scripts/crop_pdf_figures_by_caption.py Caption-aware figure cropper using pdftotext bbox coordinates.
+scripts/crop_pdf_regions.py       Manual clean-box cropper with padding, trimming, and upscaling.
+scripts/figure_quality_validator.py Check cropped figure readability and likely crop mistakes.
 scripts/create_10_slide_spec_template.py Create a standard 10-slide group-meeting spec.
-scripts/build_pptx_from_spec.py   Build PPTX, HTML preview, and speaker notes from slide_specs.json.
+scripts/create_visual_first_spec_template.py Create a visual-first Page Goal/Visual/Content spec.
+scripts/slide_architect.py       Split overloaded content before rendering.
+scripts/build_html_report_from_spec.py Build final HTML report and speaker notes.
+scripts/build_editable_pptx_from_spec.py Build editable PPTX from the same section spec.
+scripts/html_layout_validator.py Validate HTML sections and generate layout_check_report.md.
+scripts/build_pptx_from_spec.py   Optional compatibility PPTX renderer.
+scripts/layout_validator.py       Optional PPTX-style layout validator.
 scripts/refine_presentation_loop.py Run generator-reviewer-reviser refinement rounds.
 ```
 
@@ -85,7 +107,7 @@ Install this folder as a skill. Then ask:
 
 ```text
 Please turn this research paper PDF into a group-meeting presentation.
-Include paper understanding, cropped figures/tables/algorithms, PPTX, HTML preview, and speaker notes.
+Include paper understanding, visual sections, figures/tables/algorithms, HTML report, editable PPTX, layout check, figure quality check, review report, and speaker notes.
 ```
 
 The skill instructions in `SKILL.md` define the complete workflow.
@@ -95,19 +117,70 @@ The skill instructions in `SKILL.md` define the complete workflow.
 Render pages:
 
 ```bash
-python scripts/render_pdf_pages.py paper.pdf --out output/pages --dpi 140
+python scripts/render_pdf_pages.py paper.pdf --out output/pages --dpi 220
 ```
 
-Crop regions:
+Crop figures by caption whenever possible:
 
 ```bash
-python scripts/crop_pdf_regions.py --pages output/pages --spec crop_specs.json --out output/figures
+python scripts/crop_pdf_figures_by_caption.py --pdf paper.pdf --pages output/pages --spec caption_crop_specs.json --out output/figures
 ```
 
-Build slides:
+Example caption spec:
+
+```json
+[
+  {"file": "fig2_tas_vs_cedf.png", "page": 4, "label": "Fig. 2", "column": "right", "position": "above"}
+]
+```
+
+Manual clean-box crop when caption detection is not enough:
 
 ```bash
-python scripts/build_pptx_from_spec.py --spec output/intermediate/slide_specs.json --out output
+python scripts/crop_pdf_regions.py --pages output/pages --spec crop_specs.json --out output/figures --padding 24 --trim --min-width 1000
+```
+
+Connected-component repair is a last-resort fallback for a single problematic figure. Do not batch-apply it to all crops, because it can merge nearby body text in two-column PDFs:
+
+```bash
+python scripts/crop_pdf_regions.py --pages output/pages --spec one_figure_crop.json --out output/figures --component-expand --search-pad 320 --min-width 1000
+```
+
+Check cropped figure quality:
+
+```bash
+python scripts/figure_quality_validator.py --figures output/figures --report output/figure_quality_report.md
+```
+
+Build HTML report:
+
+```bash
+python scripts/build_html_report_from_spec.py --spec output/intermediate/slide_specs.json --out output
+```
+
+Build editable PPTX:
+
+```bash
+python scripts/build_editable_pptx_from_spec.py --spec output/intermediate/slide_specs.json --out output
+```
+
+Run Slide Architect before building:
+
+```bash
+python scripts/slide_architect.py \
+  --spec output/intermediate/slide_specs.json \
+  --out output/intermediate/slide_specs.architected.json \
+  --report output/intermediate/slide_architect_report.md
+```
+
+Run HTML Layout Validator after building:
+
+```bash
+python scripts/html_layout_validator.py \
+  --project output \
+  --spec output/intermediate/slide_specs.architected.json \
+  --html output/final_presentation_generated.html \
+  --report output/layout_check_report.md
 ```
 
 Create the default 10-slide group-meeting structure:
@@ -116,19 +189,49 @@ Create the default 10-slide group-meeting structure:
 python scripts/create_10_slide_spec_template.py --project output --lang zh
 ```
 
+Create a Visual-first academic talk structure:
+
+```bash
+python scripts/create_visual_first_spec_template.py --project output --lang zh
+```
+
+Each section in `slide_specs.json` should include:
+
+```json
+{
+  "page_goal": "What should the audience understand in 5 seconds?",
+  "visual": {
+    "type": "comparison | pipeline | flow | result_bar | concept"
+  },
+  "content": "Minimal text that supports the visual"
+}
+```
+
+Visual-first rules:
+
+- Background slides should use scenario/system/statistics visuals, not text only.
+- Problem slides should use Existing vs Paper Setting or bottleneck diagrams.
+- Method slides should use framework, pipeline, workflow, or architecture diagrams.
+- Algorithm slides should use flowcharts or decision flows instead of raw pseudocode.
+- Experiment slides should show validation logic: setup -> baselines -> metrics -> claim.
+- Result slides should simplify charts and mark So What, such as `Latency ↓ 25%`.
+- Takeaways should state maximum contribution, maximum novelty, and maximum limitation.
+
 Run iterative refinement:
 
 ```bash
 python scripts/refine_presentation_loop.py --project output --rounds 3 --target-score 8.5
 ```
 
-The Discriminator report scores every slide:
+The Discriminator report scores every section:
 
 ```text
 Scientific Accuracy: 1-10
 Storytelling: 1-10
-Visual Quality: 1-10
-Presentation Readiness: 1-10
+Readability: 1-10
+Visual Hierarchy: 1-10
+Visual-first Compliance: 1-10
+Layout Safety: 1-10
 ```
 
 It also gives:
@@ -146,8 +249,13 @@ This creates:
 ```text
 output/runs/round_01/reviewer_report.md
 output/runs/round_01/revision_plan.md
-output/final/final_presentation.pptx
+output/runs/round_01/slide_architect_report.md
+output/runs/round_01/layout_check_report.md
+output/runs/round_01/figure_quality_report.md
+output/final/final_presentation_generated.html
 output/final/final_presentation.html
+output/final/final_presentation_generated.pptx
+output/final/final_presentation.pptx
 output/final/speaker_notes.md
 output/improvement_history.md
 ```
@@ -155,8 +263,8 @@ output/improvement_history.md
 ## Limitations
 
 - Arbitrary PDFs can be difficult: scanned PDFs, bad captions, and unusual layouts may require manual crop adjustment.
-- The included PPTX renderer is intentionally simple. For highly polished visual design, hand off the slide specs and cropped figures to a mature slide-design skill.
-- The output is a strong first draft for research discussion, not a guaranteed final conference presentation.
+- The editable PPTX renderer is deterministic and produces strong first-draft academic slides. Very complex figures may still need manual re-cropping or redrawing.
+- The output is a strong first draft for research discussion, not a guaranteed final conference/report artifact.
 - The bundled reviewer loop is a deterministic structural judge. For true expert-level critique, combine it with an AI reviewer using `references/reviewer_rubric.md`.
 
 ## License

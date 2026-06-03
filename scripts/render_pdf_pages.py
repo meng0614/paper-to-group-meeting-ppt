@@ -18,7 +18,7 @@ def main():
     ap = argparse.ArgumentParser(description="Render PDF pages to PNG files for figure/table/algorithm cropping.")
     ap.add_argument("pdf", type=Path)
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--dpi", type=int, default=140)
+    ap.add_argument("--dpi", type=int, default=220, help="Render DPI. 220+ is recommended for readable PPT figures.")
     args = ap.parse_args()
     render_with_pdftoppm(args.pdf, args.out, args.dpi)
     print(f"Rendered pages to {args.out}")
