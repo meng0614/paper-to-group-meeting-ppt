@@ -6,161 +6,116 @@ import json
 from pathlib import Path
 
 
-def zh_template() -> dict:
+STORY_SLIDES = [
+    ("cover", "Problem", "Paper title: one-sentence positioning", "Audience knows the paper's core problem and why it is worth hearing."),
+    ("problem", "Problem", "The real-world situation creates a new pressure", "Audience sees why the work matters before seeing the method."),
+    ("problem", "Challenge", "Existing assumptions break in the target setting", "Audience remembers the mismatch between old methods and the paper setting."),
+    ("method", "Idea", "Key idea: reframe the hard problem into a tractable decision flow", "Audience understands the core insight in one sentence."),
+    ("method", "Method", "Framework: how the idea becomes a system or algorithm", "Audience can explain the whole method in 30 seconds."),
+    ("algorithm", "Method", "Mechanism: the key decision logic", "Audience understands why the algorithm steps exist."),
+    ("experiment", "Result", "Experiment design: how the claim is tested", "Audience sees setup, baselines, metrics, and claim as one validation chain."),
+    ("result", "Result", "Main result: the method changes the key metric", "Audience remembers the main improvement and its meaning."),
+    ("result", "Result", "Result insight: so what?", "Audience understands what the result enables or proves."),
+    ("closing", "Takeaway", "Takeaways: contribution, novelty, limitation", "Audience leaves with the strongest contribution and honest limitation."),
+]
+
+
+def make_slide(kind: str, phase: str, title: str, takeaway: str, idx: int) -> dict:
+    visual_type = {
+        "cover": "concept",
+        "problem": "comparison" if phase == "Challenge" else "pipeline",
+        "method": "pipeline",
+        "algorithm": "flow",
+        "experiment": "pipeline",
+        "result": "result_bar",
+        "closing": "concept",
+    }.get(kind, "concept")
+    visual: dict = {"type": visual_type, "insight": "Replace this with the paper-specific visual insight."}
+    if visual_type in {"pipeline", "flow"}:
+        visual["steps"] = [
+            {"label": "Context", "detail": "Replace with paper-specific element."},
+            {"label": "Decision", "detail": "Replace with paper-specific element."},
+            {"label": "Outcome", "detail": "Replace with paper-specific element."},
+        ]
+    elif visual_type == "comparison":
+        visual.update({
+            "left_title": "Existing",
+            "right_title": "Target setting",
+            "left": ["Old assumption", "Old mechanism"],
+            "right": ["New constraint", "New requirement"],
+        })
+    elif visual_type == "result_bar":
+        visual.update({
+            "items": [
+                {"label": "Baseline", "value": 70},
+                {"label": "Proposed", "value": 88, "highlight": True},
+            ],
+            "unit": "%",
+            "so_what": "So What: explain what the improvement enables.",
+        })
+    else:
+        visual["headline"] = takeaway
+    return {
+        "kind": kind,
+        "section": phase,
+        "story_phase": phase,
+        "title": title,
+        "one_message": title,
+        "audience_takeaway": takeaway,
+        "page_goal": takeaway,
+        "visual_area_min": 0.4,
+        "visual": visual,
+        "content": "Minimal explanation supporting the visual. Replace after paper understanding.",
+        "bullets": ["Replace with one short support point", "Replace with one short support point"],
+        "notes": f"Slide {idx}: explain the visual first, then the text. Do not read a paper summary.",
+    }
+
+
+def template() -> dict:
+    slides = [make_slide(kind, phase, title, takeaway, i + 1) for i, (kind, phase, title, takeaway) in enumerate(STORY_SLIDES)]
     return {
         "title": "Visual-first Academic Presentation",
-        "subtitle": "Paper group meeting talk",
+        "subtitle": "Story-first group meeting deck",
         "language": "zh",
         "style": {
-            "primary_color": "0E2557",
-            "secondary_color": "4B649F",
-            "accent_color": "FF0000",
+            "primary_color": "111827",
+            "secondary_color": "2563EB",
+            "accent_color": "DC2626",
             "neutral_color": "6B7280",
-            "light_color": "F4F7FB",
+            "light_color": "F8FAFC",
             "title_font": "Microsoft YaHei",
             "body_font": "Microsoft YaHei",
             "title_size": 30,
             "body_size": 19,
             "layout": "visual-first",
             "animation": "disable",
+            "design_system": "academic-rail",
         },
-        "slides": [
-            {
-                "kind": "cover",
-                "title": "论文标题：用一句话说明工作价值",
-                "subtitle": "作者 / 会议 / 汇报人",
-                "page_goal": "观众知道这篇论文研究什么，以及为什么值得听。",
-                "visual": {"type": "concept", "headline": "One paper, one central question"},
-                "content": "只放论文标题、作者信息和一句高层次定位。",
-                "bullets": ["研究对象", "核心问题", "主要结论"],
-                "notes": "Source: paper title page. 开场不要读摘要，先用一句话说清楚这篇论文解决的真实问题。",
-            },
-            {
-                "kind": "background",
-                "title": "为什么这个问题重要：应用场景正在制造新的系统压力",
-                "page_goal": "观众 5 秒内看到应用场景与技术压力之间的关系。",
-                "visual": {
-                    "type": "pipeline",
-                    "steps": [
-                        {"label": "Real-world need", "detail": "业务或应用场景"},
-                        {"label": "System pressure", "detail": "规模、实时性、可靠性"},
-                        {"label": "Research gap", "detail": "现有机制无法直接满足"},
-                    ],
-                    "insight": "背景页必须用场景图或系统图解释需求来源，而不是堆文字。",
-                },
-                "content": "用 2-3 个短标签解释场景、压力和研究缺口。",
-                "bullets": ["场景带来新约束", "现有系统假设被打破"],
-                "notes": "Source: paper introduction and motivation. 讲解时从真实场景开始，再过渡到论文要解决的问题。",
-            },
-            {
-                "kind": "problem",
-                "title": "现有方法的问题不是单点缺陷，而是与本文场景不匹配",
-                "page_goal": "观众看到 Existing vs Target 的冲突。",
-                "visual": {
-                    "type": "comparison",
-                    "left_title": "Existing setting",
-                    "right_title": "Paper setting",
-                    "left": ["较小规模", "单一假设", "静态或简化约束"],
-                    "right": ["更大规模", "异构环境", "端到端约束"],
-                    "insight": "研究问题来自场景变化导致的假设失效。",
-                },
-                "content": "不要罗列 5 个问题，只解释最关键的不匹配。",
-                "bullets": ["核心矛盾", "为什么旧方法不够"],
-                "notes": "Source: related work and problem formulation. 这一页要让听众明白：作者不是为了改算法而改算法。",
-            },
-            {
-                "kind": "method",
-                "title": "核心思想：把复杂问题改写成可以被系统处理的流程",
-                "page_goal": "观众 30 秒内理解方法全貌。",
-                "visual": {
-                    "type": "pipeline",
-                    "steps": [
-                        {"label": "Input", "detail": "论文问题输入"},
-                        {"label": "Representation", "detail": "建模或抽象"},
-                        {"label": "Decision", "detail": "算法/机制"},
-                        {"label": "Output", "detail": "性能或保证"},
-                    ],
-                    "insight": "方法页应展示数据流、控制流或决策流。",
-                },
-                "content": "用少量文字解释每个模块的角色。",
-                "bullets": ["输入是什么", "关键转换是什么", "输出保证是什么"],
-                "notes": "Source: method overview. 不讲细节公式，先建立听众对方法整体结构的理解。",
-            },
-            {
-                "kind": "algorithm",
-                "title": "算法页应讲决策逻辑，而不是让听众读伪代码",
-                "page_goal": "观众理解算法每一步为什么存在。",
-                "visual": {
-                    "type": "flow",
-                    "steps": [
-                        {"label": "State", "detail": "当前系统状态"},
-                        {"label": "Decision", "detail": "选择动作或策略"},
-                        {"label": "Constraint check", "detail": "检查可行性"},
-                        {"label": "Update", "detail": "更新结果"},
-                    ],
-                    "insight": "把伪代码重画为状态-决策-约束-更新流程。",
-                },
-                "content": "只保留输入、输出、关键决策和复杂度/直觉。",
-                "bullets": ["输入/输出", "核心决策", "可行性检查"],
-                "notes": "Source: algorithm section. 伪代码可放 notes，slide 上优先展示决策流程。",
-            },
-            {
-                "kind": "experiment",
-                "title": "实验设计必须回答：作者如何证明方法真的有效",
-                "page_goal": "观众看到 setup、baseline、metric 三者如何支撑结论。",
-                "visual": {
-                    "type": "pipeline",
-                    "steps": [
-                        {"label": "Setup", "detail": "数据/拓扑/任务"},
-                        {"label": "Baselines", "detail": "对比方法"},
-                        {"label": "Metrics", "detail": "关键指标"},
-                        {"label": "Claim", "detail": "要证明什么"},
-                    ],
-                    "insight": "实验页不是参数表，而是验证逻辑图。",
-                },
-                "content": "只保留影响结论可信度的设置。",
-                "bullets": ["实验对象", "对比基线", "评价指标"],
-                "notes": "Source: experiment section. 讲清楚为什么这些实验能支撑论文 claim。",
-            },
-            {
-                "kind": "result",
-                "title": "结果页必须把趋势转化成 So What",
-                "page_goal": "观众看到关键提升和它意味着什么。",
-                "visual": {
-                    "type": "result_bar",
-                    "items": [
-                        {"label": "Baseline", "value": 70},
-                        {"label": "Proposed", "value": 88, "highlight": True}
-                    ],
-                    "unit": "%",
-                    "so_what": "So What: 关键指标显著提升，说明方法在目标场景有效。",
-                },
-                "content": "重绘图表，删除无关曲线，标出最佳结果和关键提升。",
-                "bullets": ["保留核心趋势", "标注最佳结果", "解释实际意义"],
-                "notes": "Source: results section. 不直接贴复杂原图，优先重画趋势并解释 So What。",
-            },
-            {
-                "kind": "closing",
-                "title": "Takeaways：用贡献、创新和局限结束，而不是重复摘要",
-                "page_goal": "观众离开时记住这篇论文最重要的一句话。",
-                "visual": {"type": "concept", "headline": "Contribution / Novelty / Limitation"},
-                "content": "明确最大贡献、最大创新和最大局限。",
-                "bullets": ["最大贡献：", "最大创新：", "最大局限："],
-                "notes": "Source: conclusion and discussion. 结尾要帮助组会讨论，而不是复述前面内容。",
-            },
-        ],
+        "reference_design_philosophy": {
+            "policy": "Learn reference PPT design philosophy only; do not copy colors or fonts.",
+            "story_order": ["Problem", "Challenge", "Idea", "Method", "Result", "Takeaway"],
+            "visual_area_min": 0.4,
+            "learned_patterns": [
+                "stable master frame",
+                "clear title hierarchy",
+                "visual-text zoning",
+                "disciplined whitespace",
+                "limited color roles",
+                "chapter rhythm"
+            ],
+        },
+        "slides": slides,
     }
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Create a visual-first slide spec template.")
+    parser = argparse.ArgumentParser(description="Create a story-first, visual-first slide spec template.")
     parser.add_argument("--project", type=Path, required=True)
-    parser.add_argument("--lang", choices=["zh"], default="zh")
+    parser.add_argument("--lang", choices=["zh", "en"], default="zh")
     args = parser.parse_args()
-    spec = zh_template()
     out = args.project / "intermediate" / "slide_specs.json"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8")
+    out.write_text(json.dumps(template(), ensure_ascii=False, indent=2), encoding="utf-8")
     print(out)
 
 

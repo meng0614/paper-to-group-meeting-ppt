@@ -22,6 +22,35 @@ def edge_score(gray: Image.Image) -> float:
     return float(stat.mean[0])
 
 
+def likely_neighbor_text(gray: Image.Image, threshold: int = 245) -> bool:
+    w, h = gray.size
+    if w < 300 or h < 180:
+        return False
+    pix = gray.load()
+    strip_w = max(40, int(w * 0.22))
+
+    def band_count(x_start: int, x_end: int) -> int:
+        rows = []
+        width = max(1, x_end - x_start)
+        for y in range(h):
+            dark = sum(1 for x in range(x_start, x_end) if pix[x, y] < threshold)
+            if dark > max(3, int(width * 0.035)):
+                rows.append(y)
+        if not rows:
+            return 0
+        groups = 1
+        prev = rows[0]
+        for row in rows[1:]:
+            if row - prev > 8:
+                groups += 1
+            prev = row
+        return groups
+
+    left_bands = band_count(0, strip_w)
+    right_bands = band_count(w - strip_w, w)
+    return max(left_bands, right_bands) >= 14
+
+
 def analyze_image(path: Path) -> dict:
     im = Image.open(path).convert("RGB")
     w, h = im.size
@@ -54,8 +83,11 @@ def analyze_image(path: Path) -> dict:
         issues.append("possibly_blurry")
     if whitespace_ratio > 0.72:
         issues.append("too_much_whitespace")
-    tight_crop = len(touched_edges) >= 2 and whitespace_ratio < 0.12
-    one_sided_risk = any(edge in touched_edges for edge in ["left", "right"]) and whitespace_ratio < 0.04
+    if likely_neighbor_text(gray):
+        issues.append("possible_neighbor_text")
+    opposite_edges = ({"left", "right"} <= set(touched_edges)) or ({"top", "bottom"} <= set(touched_edges))
+    tight_crop = opposite_edges and whitespace_ratio < 0.015
+    one_sided_risk = any(edge in touched_edges for edge in ["left", "right"]) and whitespace_ratio < 0.02
     if tight_crop or one_sided_risk:
         issues.append("possible_incomplete_crop")
     return {
@@ -85,6 +117,7 @@ def write_markdown(report_path: Path, rows: list[dict]) -> None:
         "- possible_incomplete_crop: visual content is very tight against multiple crop edges.\n",
         "- too_much_whitespace: figure should be re-cropped or trimmed.\n",
         "- low_contrast / possibly_blurry: source render DPI or crop quality may be insufficient.\n\n",
+        "- possible_neighbor_text: crop likely includes adjacent body text rather than only the paper figure/table.\n\n",
         "## Per Figure\n\n",
     ]
     for row in rows:
@@ -109,6 +142,7 @@ def main() -> None:
     image_paths = []
     for pattern in ("*.png", "*.jpg", "*.jpeg"):
         image_paths.extend(sorted(args.figures.glob(pattern)))
+    image_paths = [path for path in image_paths if "contact_sheet" not in path.stem.lower()]
     rows = [analyze_image(path) for path in image_paths]
     write_markdown(args.report, rows)
     if args.json_report:

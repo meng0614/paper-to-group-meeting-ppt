@@ -12,11 +12,11 @@ from PIL import Image
 EMU_W, EMU_H = 12192000, 6858000
 
 DEFAULT_STYLE = {
-    "primary_color": "0E2557",
-    "secondary_color": "4B649F",
-    "accent_color": "FF0000",
+    "primary_color": "111827",
+    "secondary_color": "2563EB",
+    "accent_color": "DC2626",
     "neutral_color": "6B7280",
-    "light_color": "F4F7FB",
+    "light_color": "F8FAFC",
     "title_font": "Microsoft YaHei",
     "body_font": "Microsoft YaHei",
     "title_size": 30,

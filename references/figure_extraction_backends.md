@@ -9,7 +9,8 @@ Use Poppler tools already available on many TeX/academic machines:
 1. `pdftoppm` renders pages at high DPI.
 2. `pdftotext -bbox-layout` locates caption text and page coordinates.
 3. `scripts/crop_pdf_figures_by_caption.py` crops the visual region adjacent to the caption and constrained to the same column.
-4. `scripts/figure_quality_validator.py` checks resolution, contrast, whitespace, and likely incomplete crops.
+4. `scripts/crop_pdf_regions.py` uses seed-aware edge cleanup for manual crops, removing neighboring body text, page headers, and caption fragments when they are not connected to the intended figure seed.
+5. `scripts/figure_quality_validator.py` checks resolution, contrast, whitespace, likely incomplete crops, and likely neighboring body text.
 
 This backend is lightweight and works without network or Java.
 

@@ -8,16 +8,17 @@ from pathlib import Path
 
 
 DEFAULT_STYLE = {
-    "primary_color": "0E2557",
-    "secondary_color": "4B649F",
-    "accent_color": "FF0000",
+    "primary_color": "111827",
+    "secondary_color": "2563EB",
+    "accent_color": "DC2626",
     "neutral_color": "6B7280",
-    "light_color": "F4F7FB",
+    "light_color": "F8FAFC",
     "title_font": "Microsoft YaHei",
     "body_font": "Microsoft YaHei",
     "title_size": 34,
     "body_size": 18,
     "layout": "html-report",
+    "design_system": "academic-rail",
 }
 
 
@@ -55,6 +56,8 @@ def normalize_sections(spec: dict) -> list[dict]:
         sec.setdefault("section", name_map.get(sec.get("kind", "content"), sec.get("kind", "Section").title()))
         sec.setdefault("id", f"section-{idx}")
         sec.setdefault("page_goal", sec.get("title", ""))
+        sec.setdefault("audience_takeaway", sec.get("page_goal", sec.get("title", "")))
+        sec.setdefault("one_message", sec.get("title", sec.get("page_goal", "")))
         sec.setdefault("content", "")
         sec.setdefault("bullets", [])
         normalized.append(sec)
@@ -161,7 +164,7 @@ def render_section(section: dict, project: Path) -> str:
           {render_visual(section, project)}
         </div>
         <div class="text-zone">
-          <div class="goal-box"><b>Page Goal</b><p>{esc(section.get('page_goal'))}</p></div>
+          <div class="goal-box"><b>5-second takeaway</b><p>{esc(section.get('audience_takeaway') or section.get('page_goal'))}</p></div>
           <p class="content-text">{esc(body)}</p>
           <ul class="key-list">{bullets}</ul>
           {f'<div class="formula">\\({esc(formula)}\\)</div>' if formula else ''}
@@ -194,18 +197,18 @@ def stylesheet(style: dict) -> str:
     nav.toc {{ position: sticky; top: 0; z-index: 5; background: rgba(255,255,255,.96); border-bottom: 1px solid #d7deea; padding: 12px 8vw; display: flex; gap: 14px; flex-wrap: wrap; }}
     nav.toc a {{ color: var(--primary); text-decoration: none; font-weight: 700; padding: 6px 10px; border-left: 4px solid var(--accent); }}
     main {{ padding: 34px 7vw 80px; }}
-    .report-section {{ background: white; margin: 0 auto 34px; max-width: 1280px; min-height: 520px; padding: 34px; border-left: 10px solid var(--secondary); box-shadow: 0 12px 32px rgba(14,37,87,.12); overflow: hidden; }}
+    .report-section {{ background: white; margin: 0 auto 38px; max-width: 1280px; min-height: 620px; padding: 38px; border-left: 10px solid var(--secondary); box-shadow: 0 12px 32px rgba(14,37,87,.12); overflow: hidden; }}
     .section-kicker {{ color: var(--accent); font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }}
     h2 {{ font-family: var(--title-font); font-size: var(--title-size); color: var(--primary); margin: 6px 0 26px; line-height: 1.22; }}
-    .section-grid {{ display: grid; grid-template-columns: minmax(420px, 1.15fr) minmax(340px, .85fr); gap: 30px; align-items: start; }}
-    .visual-zone {{ min-height: 320px; display: grid; align-content: center; }}
+    .section-grid {{ display: grid; grid-template-columns: minmax(560px, 1.55fr) minmax(280px, .45fr); gap: 34px; align-items: start; }}
+    .visual-zone {{ min-height: 390px; display: grid; align-content: center; }}
     .text-zone {{ min-width: 0; }}
     .goal-box {{ background: #f5f7fb; border-left: 6px solid var(--accent); padding: 14px 16px; margin-bottom: 18px; }}
     .goal-box p {{ margin: 6px 0 0; }}
-    .content-text {{ font-size: 18px; }}
+    .content-text {{ font-size: 17px; }}
     .key-list {{ padding-left: 22px; }}
     .key-list li {{ margin: 8px 0; }}
-    .visual-card {{ background: #f8fafc; border: 1px solid #d7deea; padding: 24px; min-height: 280px; }}
+    .visual-card {{ background: #f8fafc; border: 1px solid #d7deea; padding: 26px; min-height: 390px; }}
     .comparison {{ display: grid; grid-template-columns: 1fr auto 1fr; gap: 18px; align-items: stretch; }}
     .compare-panel {{ background: white; border-top: 6px solid var(--secondary); padding: 18px; }}
     .compare-panel.highlight {{ border-top-color: var(--accent); }}
@@ -217,7 +220,7 @@ def stylesheet(style: dict) -> str:
     .step-index {{ position: absolute; right: 14px; top: 10px; color: #cbd5e1; font-size: 28px; font-weight: 900; }}
     .concept h3 {{ font-size: 28px; color: var(--primary); }}
     .concept-line {{ height: 8px; width: 120px; background: var(--accent); margin-bottom: 24px; }}
-    .paper-figure img {{ max-width: 100%; max-height: 460px; object-fit: contain; display: block; margin: 0 auto; border: 1px solid #d7deea; }}
+    .paper-figure img {{ max-width: 100%; max-height: 520px; object-fit: contain; display: block; margin: 0 auto; border: 1px solid #d7deea; }}
     .paper-figure figcaption {{ margin-top: 10px; color: var(--neutral); font-size: 14px; }}
     .bar-row {{ display: grid; grid-template-columns: 170px 1fr 92px; align-items: center; gap: 12px; margin: 18px 0; }}
     .bar-track {{ height: 24px; background: #e8eef7; overflow: hidden; }}

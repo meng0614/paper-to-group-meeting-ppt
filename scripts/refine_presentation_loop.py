@@ -48,10 +48,26 @@ def judge_section(section: dict, idx: int, layout_status: str) -> dict:
         score -= 0.7
         issues.append("Missing Page Goal.")
         tasks.append("Add a Page Goal that states what readers should understand in 5 seconds.")
+    if not section.get("one_message"):
+        score -= 0.6
+        issues.append("Missing One Message.")
+        tasks.append("Add exactly one core message for this slide.")
+    if not section.get("audience_takeaway"):
+        score -= 0.4
+        issues.append("Missing 5-second audience takeaway.")
+        tasks.append("Add the one thing the audience should remember after 5 seconds.")
+    if not section.get("story_phase"):
+        score -= 0.4
+        issues.append("Missing story phase.")
+        tasks.append("Assign one story phase: Problem, Challenge, Idea, Method, Result, or Takeaway.")
     if not has_visual(section):
         score -= 1.4
         issues.append("Section has no visual center.")
         tasks.append("Add a paper figure, concept diagram, flow, comparison, table, or result chart.")
+    if float(section.get("visual_area_min", 0) or 0) < 0.4:
+        score -= 0.5
+        issues.append("Visual area target is below 40%.")
+        tasks.append("Set visual_area_min to at least 0.4 and make the visual the slide center.")
     if text_len(section.get("title")) < 10:
         score -= 0.3
         issues.append("Title is too weak as a section-level claim.")
@@ -86,12 +102,13 @@ def judge_section(section: dict, idx: int, layout_status: str) -> dict:
             "Storytelling": storytelling,
             "Readability": readability,
             "Visual Hierarchy": visual,
+            "Presentation-first Design": max(1, min(10, round(score + (0.5 if section.get("one_message") and section.get("story_phase") else -0.6), 2))),
         },
         "advice": {
             "KEEP": ["Keep the central claim and visual-first organization."],
             "REMOVE": ["Remove text that duplicates the visual."] if text_len(section.get("content")) > 900 else ["No required removal."],
             "ADD": tasks[:3] if tasks else ["Add one discussion question or So What sentence."],
-            "MODIFY": ["Ensure Page Goal -> Visual -> Content order remains visible."],
+            "MODIFY": ["Ensure Story Phase -> One Message -> 5-second Takeaway -> Visual -> Content order remains visible."],
             "REGENERATE": "yes" if issues or score < 9 else "no",
         },
         "issues": issues,
@@ -102,7 +119,7 @@ def judge_section(section: dict, idx: int, layout_status: str) -> dict:
 def judge_report(spec: dict, layout_status: str) -> dict:
     reports = [judge_section(sec, i + 1, layout_status) for i, sec in enumerate(sections(spec))]
     dims = {}
-    for name in ["Scientific Accuracy", "Storytelling", "Readability", "Visual Hierarchy"]:
+    for name in ["Scientific Accuracy", "Storytelling", "Readability", "Visual Hierarchy", "Presentation-first Design"]:
         dims[name] = round(sum(r["scores"][name] for r in reports) / max(1, len(reports)), 2)
     visual_compliance = round(sum(1 for sec in sections(spec) if has_visual(sec)) / max(1, len(sections(spec))) * 10, 2)
     if layout_status != "PASS":
@@ -118,6 +135,7 @@ def judge_report(spec: dict, layout_status: str) -> dict:
         "dimensions": {
             **dims,
             "Visual-first Compliance": visual_compliance,
+            "One Slide One Message": round(sum(1 for sec in sections(spec) if sec.get("one_message")) / max(1, len(sections(spec))) * 10, 2),
             "Layout Safety": 10.0 if layout_status == "PASS" else 6.0,
             "HTML Report Readiness": round((dims["Storytelling"] + dims["Readability"] + dims["Visual Hierarchy"]) / 3, 2),
         },
@@ -158,6 +176,10 @@ def revise_spec(spec: dict, report: dict) -> dict:
     fixed = []
     for idx, sec in enumerate(sections(new), 1):
         sec.setdefault("page_goal", sec.get("title", ""))
+        sec.setdefault("one_message", sec.get("title") or sec.get("page_goal", ""))
+        sec.setdefault("audience_takeaway", sec.get("page_goal", sec.get("title", "")))
+        sec.setdefault("story_phase", "Idea")
+        sec.setdefault("visual_area_min", 0.4)
         sec.setdefault("content", "")
         if not has_visual(sec):
             sec["visual"] = {"type": "concept", "headline": sec.get("page_goal") or sec.get("title", "")}
@@ -267,6 +289,18 @@ def main() -> None:
 
         pptx_path = Path(run([sys.executable, str(script_dir / "build_editable_pptx_from_spec.py"), "--spec", str(planned_spec), "--out", str(round_dir)]))
         pptx_status = validate_pptx(pptx_path)
+        pptx_layout_status = "FAIL"
+        if pptx_status == "PASS":
+            pptx_layout_status = run([
+                sys.executable,
+                str(script_dir / "pptx_layout_validator.py"),
+                "--pptx",
+                str(pptx_path),
+                "--report",
+                str(round_dir / "pptx_layout_check_report.md"),
+                "--json-report",
+                str(round_dir / "pptx_layout_check_report.json"),
+            ])
 
         figures_dir = round_dir / "figures"
         figure_status = "SKIP"
@@ -285,6 +319,7 @@ def main() -> None:
         current_spec = load_json(planned_spec)
         report = judge_report(current_spec, layout_status)
         report["dimensions"]["Editable PPTX Validity"] = 10.0 if pptx_status == "PASS" else 4.0
+        report["dimensions"]["Editable PPTX Layout"] = 10.0 if pptx_layout_status == "PASS" else 6.0
         report["dimensions"]["Figure Crop Quality"] = 10.0 if figure_status in {"PASS", "SKIP"} else 7.0
         write_json(round_dir / "reviewer_report.json", report)
         write_review(round_dir / "review_report.md", report)
@@ -298,12 +333,13 @@ def main() -> None:
             "score": report["overall_score"],
             "layout": layout_status,
             "pptx": pptx_status,
+            "pptx_layout": pptx_layout_status,
             "figures": figure_status,
             "dimensions": report["dimensions"],
             "sections": len(sections(current_spec)),
         })
-        key_dims = ["Scientific Accuracy", "Storytelling", "Readability", "Visual Hierarchy"]
-        if layout_status == "PASS" and pptx_status == "PASS" and all(float(report["dimensions"].get(dim, 0)) >= args.target_score for dim in key_dims):
+        key_dims = ["Scientific Accuracy", "Storytelling", "Readability", "Visual Hierarchy", "Presentation-first Design"]
+        if layout_status == "PASS" and pptx_status == "PASS" and pptx_layout_status == "PASS" and all(float(report["dimensions"].get(dim, 0)) >= args.target_score for dim in key_dims):
             break
         spec = revise_spec(current_spec, report)
 
@@ -319,6 +355,7 @@ def main() -> None:
         "final_presentation_generated.pptx",
         "final_presentation.pptx",
         "layout_check_report.md",
+        "pptx_layout_check_report.md",
         "figure_quality_report.md",
         "review_report.md",
         "improvement_history.md",
@@ -333,7 +370,7 @@ def main() -> None:
         dims = ", ".join(f"{k}={v}" for k, v in item["dimensions"].items())
         lines.append(
             f"- Round {item['round']}: score {item['score']}/10, "
-            f"layout={item['layout']}, pptx={item['pptx']}, figures={item['figures']}, "
+            f"layout={item['layout']}, pptx={item['pptx']}, pptx_layout={item['pptx_layout']}, figures={item['figures']}, "
             f"sections={item['sections']}, {dims}\n"
         )
     (project / "improvement_history.md").write_text("".join(lines), encoding="utf-8")

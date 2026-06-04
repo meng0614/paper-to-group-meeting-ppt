@@ -20,6 +20,25 @@ CAPACITY = {
     "content": {"bullets": 3, "chars": 170, "steps": 4},
 }
 
+STORY_ORDER = ["Problem", "Challenge", "Idea", "Method", "Result", "Takeaway"]
+
+STORY_BY_KIND = {
+    "cover": "Problem",
+    "background": "Problem",
+    "problem": "Problem",
+    "motivation": "Challenge",
+    "challenge": "Challenge",
+    "idea": "Idea",
+    "method": "Method",
+    "algorithm": "Method",
+    "figure": "Method",
+    "experiment": "Result",
+    "result": "Result",
+    "results": "Result",
+    "closing": "Takeaway",
+    "conclusion": "Takeaway",
+}
+
 
 SPLIT_TITLES = {
     "method": ["Method Overview", "Method Details", "Method Example"],
@@ -32,6 +51,13 @@ SPLIT_TITLES = {
 
 def text_len(value) -> int:
     return len(str(value or "").strip())
+
+
+def compact_title(value: str, limit: int = 34) -> str:
+    text = str(value or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "..."
 
 
 def visual_complexity(slide: dict) -> int:
@@ -49,6 +75,37 @@ def visual_complexity(slide: dict) -> int:
     return 1 if slide.get("image") or slide.get("visual") else 0
 
 
+def has_visual(slide: dict) -> bool:
+    return bool(slide.get("image") or slide.get("visual") or slide.get("table") or slide.get("pseudocode"))
+
+
+def infer_story_phase(slide: dict) -> str:
+    explicit = slide.get("story_phase")
+    if explicit:
+        normalized = str(explicit).strip().title()
+        return normalized if normalized in STORY_ORDER else str(explicit).strip()
+    kind = str(slide.get("kind", "content")).lower()
+    title = str(slide.get("title", "")).lower()
+    if any(token in title for token in ["challenge", "limitation", "bottleneck", "局限", "挑战", "瓶颈"]):
+        return "Challenge"
+    if any(token in title for token in ["idea", "insight", "key", "核心思想", "关键思想"]):
+        return "Idea"
+    if any(token in title for token in ["result", "evaluation", "experiment", "结果", "实验"]):
+        return "Result"
+    if any(token in title for token in ["takeaway", "conclusion", "limitation", "future", "总结", "局限"]):
+        return "Takeaway"
+    return STORY_BY_KIND.get(kind, "Idea")
+
+
+def story_sort_key(item: tuple[int, dict]) -> tuple[int, int]:
+    idx, slide = item
+    kind = str(slide.get("kind", "")).lower()
+    if kind == "cover":
+        return (-1, idx)
+    phase = infer_story_phase(slide)
+    return (STORY_ORDER.index(phase) if phase in STORY_ORDER else 2, idx)
+
+
 def capacity_for(slide: dict) -> dict:
     return CAPACITY.get(slide.get("kind", "content"), CAPACITY["content"])
 
@@ -57,10 +114,12 @@ def overloaded(slide: dict) -> bool:
     cap = capacity_for(slide)
     bullets = slide.get("bullets", []) or []
     text_budget = text_len(slide.get("title")) + text_len(slide.get("subtitle")) + text_len(slide.get("content")) + sum(text_len(b) for b in bullets)
+    visual = slide.get("visual") or {}
+    visual_limit = 6 if visual.get("type") == "comparison" else cap["steps"]
     return (
         len(bullets) > cap["bullets"]
         or text_budget > cap["chars"]
-        or visual_complexity(slide) > cap["steps"]
+        or visual_complexity(slide) > visual_limit
         or any(text_len(b) > 70 for b in bullets)
     )
 
@@ -68,8 +127,19 @@ def overloaded(slide: dict) -> bool:
 def compact_slide(slide: dict) -> dict:
     new = deepcopy(slide)
     cap = capacity_for(new)
-    new.setdefault("page_goal", new.get("title", ""))
+    new["story_phase"] = infer_story_phase(new)
+    new.setdefault("one_message", new.get("title") or new.get("page_goal", ""))
+    new.setdefault("page_goal", new.get("one_message") or new.get("title", ""))
+    new.setdefault("audience_takeaway", new.get("page_goal", ""))
+    new.setdefault("visual_area_min", 0.40)
+    new.setdefault("design_brief", {
+        "principle": "One Slide One Message / Visual First / Whitespace First",
+        "visual_subject_area": ">=40%",
+        "hierarchy": "title > visual > explanation",
+    })
     new.setdefault("content", "Minimal text supporting the main visual.")
+    if not has_visual(new):
+        new["visual"] = {"type": "concept", "headline": new.get("one_message") or new.get("page_goal") or new.get("title", "")}
     new["bullets"] = [str(b).strip() for b in (new.get("bullets", []) or []) if str(b).strip()][: cap["bullets"]]
     visual = new.get("visual") or {}
     if visual.get("type") in {"pipeline", "flow"} and len(visual.get("steps", []) or []) > cap["steps"]:
@@ -101,7 +171,7 @@ def split_slide(slide: dict) -> list[dict]:
             if not chunk:
                 continue
             new = deepcopy(slide)
-            new["title"] = f"{slide.get('title', kind.title())}: {split_names[min(idx, len(split_names)-1)]}"
+            new["title"] = f"{split_names[min(idx, len(split_names)-1)]}: {compact_title(slide.get('title', kind.title()))}"
             new["page_goal"] = f"{slide.get('page_goal', '')} ({split_names[min(idx, len(split_names)-1)]})"
             new["visual"] = deepcopy(visual)
             new["visual"]["steps"] = chunk
@@ -113,7 +183,7 @@ def split_slide(slide: dict) -> list[dict]:
         chunk_size = capacity_for(slide)["bullets"]
         for idx in range(0, len(bullets), chunk_size):
             new = deepcopy(slide)
-            new["title"] = f"{slide.get('title', kind.title())}: {split_names[min(idx // chunk_size, len(split_names)-1)]}"
+            new["title"] = f"{split_names[min(idx // chunk_size, len(split_names)-1)]}: {compact_title(slide.get('title', kind.title()))}"
             new["page_goal"] = f"{slide.get('page_goal', '')} ({split_names[min(idx // chunk_size, len(split_names)-1)]})"
             new["bullets"] = bullets[idx : idx + chunk_size]
             parts.append(compact_slide(new))
@@ -122,14 +192,19 @@ def split_slide(slide: dict) -> list[dict]:
     overview = compact_slide(slide)
     overview["content"] = str(overview.get("content", ""))[:120]
     detail = compact_slide(slide)
-    detail["title"] = f"{slide.get('title', kind.title())}: Details"
-    detail["page_goal"] = "Explain the supporting detail without crowding the overview slide."
-    detail["visual"] = {"type": "concept", "headline": detail.get("content", detail.get("title", ""))}
+    detail["title"] = f"Details: {compact_title(slide.get('title', kind.title()))}"
+    detail["page_goal"] = slide.get("page_goal") or "Explain the supporting detail without crowding the overview slide."
+    detail["audience_takeaway"] = slide.get("audience_takeaway") or detail["page_goal"]
+    detail["visual"] = {
+        "type": "concept",
+        "headline": "Supporting detail",
+        "insight": str(slide.get("content") or slide.get("body") or "")[:140],
+    }
     if kind == "result":
         source_visual = slide.get("visual") or {}
         detail["visual"]["so_what"] = source_visual.get("so_what") or source_visual.get("insight") or "So What: the result supports the paper's core claim."
         detail["visual"]["insight"] = detail["visual"]["so_what"]
-    detail["content"] = "Supporting details are moved here to preserve readability."
+    detail["content"] = str(slide.get("content") or slide.get("body") or "Supporting details for the previous slide.")[:220]
     detail["bullets"] = bullets[:2]
     return [overview, detail]
 
@@ -138,14 +213,21 @@ def architecture_report(original: list[dict], planned: list[dict]) -> str:
     lines = ["# Slide Architect Report\n\n"]
     lines.append(f"- Original slide count: {len(original)}\n")
     lines.append(f"- Planned slide count: {len(planned)}\n")
-    lines.append("- Rule: prefer adding pages over shrinking fonts.\n\n")
+    lines.append("- Rule: prefer adding pages over shrinking fonts.\n")
+    lines.append("- Story order: Problem -> Challenge -> Idea -> Method -> Result -> Takeaway.\n")
+    lines.append("- Design rule: one slide one message; visual subject area target >= 40%.\n\n")
     for idx, slide in enumerate(planned, 1):
         cap = capacity_for(slide)
         lines.append(f"## Slide {idx}: {slide.get('title', '')}\n\n")
+        lines.append(f"- Story phase: {slide.get('story_phase', infer_story_phase(slide))}\n")
+        lines.append(f"- One message: {slide.get('one_message', slide.get('title', ''))}\n")
+        lines.append(f"- 5-second takeaway: {slide.get('audience_takeaway', slide.get('page_goal', ''))}\n")
         lines.append(f"- Kind: {slide.get('kind', 'content')}\n")
         lines.append(f"- Layout: {slide.get('layout', slide.get('style', {}).get('layout', 'auto'))}\n")
         lines.append(f"- Bullet count: {len(slide.get('bullets', []) or [])}/{cap['bullets']}\n")
-        lines.append(f"- Visual complexity: {visual_complexity(slide)}/{cap['steps']}\n")
+        visual_limit = 6 if (slide.get("visual") or {}).get("type") == "comparison" else cap["steps"]
+        lines.append(f"- Visual complexity: {visual_complexity(slide)}/{visual_limit}\n")
+        lines.append(f"- Visual area target: {slide.get('visual_area_min', 0.4)}\n")
         lines.append(f"- Page Goal: {slide.get('page_goal', '')}\n")
         lines.append(f"- Visual: {(slide.get('visual') or {}).get('type', 'image/table/text')}\n")
         lines.append(f"- Capacity status: {'PASS' if not overloaded(slide) else 'WARN'}\n\n")
@@ -156,13 +238,16 @@ def architect(spec: dict) -> dict:
     new = deepcopy(spec)
     planned: list[dict] = []
     source_key = "sections" if "sections" in spec else "slides"
-    for slide in spec.get(source_key, []):
+    source = [slide for _, slide in sorted(enumerate(spec.get(source_key, [])), key=story_sort_key)]
+    for slide in source:
         planned.extend(split_slide(slide))
     new[source_key] = planned
     new.setdefault("planning", {})["slide_architect"] = {
         "original_slide_count": len(spec.get(source_key, [])),
         "planned_slide_count": len(planned),
-        "rule": "Prefer splitting pages over shrinking fonts.",
+        "rule": "Plan the page first, then fill content. Prefer splitting pages over shrinking fonts.",
+        "story_order": STORY_ORDER,
+        "visual_area_min": 0.40,
     }
     return new
 

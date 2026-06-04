@@ -10,18 +10,32 @@ Use this JSON shape for `intermediate/slide_specs.json`. The default renderers n
   "date": "YYYY-MM-DD",
   "language": "zh",
   "style": {
-    "primary_color": "0E2557",
-    "secondary_color": "4B649F",
-    "accent_color": "FF0000",
+    "primary_color": "111827",
+    "secondary_color": "2563EB",
+    "accent_color": "DC2626",
     "neutral_color": "6B7280",
-    "light_color": "F4F7FB",
+    "light_color": "F8FAFC",
     "title_font": "Microsoft YaHei",
     "body_font": "Microsoft YaHei",
     "title_size": 30,
     "body_size": 19,
-    "layout": "reference-inspired",
+    "layout": "visual-first",
+    "design_system": "academic-rail",
     "animation": "disable",
-    "reference_pptx": "optional reference PPT path"
+    "reference_pptx": "optional reference PPT path; do not copy its colors or fonts"
+  },
+  "reference_design_philosophy": {
+    "policy": "learn layout philosophy only, not colors or fonts",
+    "visual_area_min": 0.4,
+    "story_order": ["Problem", "Challenge", "Idea", "Method", "Result", "Takeaway"],
+    "learned_patterns": [
+      "stable master frame",
+      "clear title hierarchy",
+      "visual-text zoning",
+      "disciplined whitespace",
+      "limited color roles",
+      "chapter rhythm"
+    ]
   },
   "refinement": {
     "last_reviewer_score": 7.8,
@@ -40,7 +54,11 @@ Use this JSON shape for `intermediate/slide_specs.json`. The default renderers n
       "kind": "cover | section | background | problem | method | figure | algorithm | experiment | result | matrix | closing",
       "title": "Assertion headline",
       "subtitle": "Optional",
+      "story_phase": "Problem | Challenge | Idea | Method | Result | Takeaway",
+      "one_message": "The single core claim of this slide.",
+      "audience_takeaway": "What the audience should remember in 5 seconds.",
       "page_goal": "What the audience should understand in 5 seconds.",
+      "visual_area_min": 0.4,
       "visual": {
         "type": "comparison | pipeline | flow | result_bar | concept",
         "insight": "Main visual takeaway"
@@ -63,6 +81,14 @@ Use this JSON shape for `intermediate/slide_specs.json`. The default renderers n
 ```
 
 ## HTML Report Layout Guidance
+
+Do not follow paper section order mechanically. First build a research story:
+
+```text
+Problem -> Challenge -> Idea -> Method -> Result -> Takeaway
+```
+
+Every slide should have one core message and one visual center. The visual center should occupy at least 40% of the page. Reference PPTs may guide page density, visual hierarchy, and whitespace, but their colors and fonts must not be copied unless the user explicitly asks.
 
 - `cover`: title, subtitle, and framing text.
 - `section`: chapter divider for a paper or major part.
@@ -207,11 +233,11 @@ Supported deterministic visual specs:
 
 Generator must follow `style` when present:
 
-- `primary_color`: default `0E2557`;
-- `secondary_color`: default `4B649F`;
-- `accent_color`: default `FF0000`;
+- `primary_color`: default `111827`;
+- `secondary_color`: default `2563EB`;
+- `accent_color`: default `DC2626`;
 - `neutral_color`: default `6B7280`;
-- `light_color`: default `F4F7FB`;
+- `light_color`: default `F8FAFC`;
 - `title_font`: default `Microsoft YaHei`;
 - `body_font`: default `Microsoft YaHei`;
 - `title_size`: 28-36 recommended;

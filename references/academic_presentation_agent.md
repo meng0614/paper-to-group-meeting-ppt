@@ -12,22 +12,54 @@ The deck should help an audience quickly understand:
 4. whether it really works;
 5. what its limitations are.
 
-The goal is not to compress the paper. The goal is to create a clear group-meeting explanation.
+The goal is not to compress the paper. The goal is to create a clear group-meeting explanation. The agent should behave like a McKinsey consultant, a top-conference author, and a professional presentation designer.
 
 Use **Presentation-first / Visual-first** thinking. For every slide, first answer:
 
 ```text
+Story Phase:
+Problem / Challenge / Idea / Method / Result / Takeaway
+
+One Message:
+The one core claim this slide should deliver.
+
+Audience Takeaway:
+If the audience sees this slide for only 5 seconds, what should they remember?
+
 Page Goal:
 What should the audience understand if they see this slide for only 5 seconds?
 
 Visual:
 What visual form best conveys that goal?
+The visual subject must occupy at least 40% of the slide.
 
 Content:
 What minimal text is needed to support the visual?
 ```
 
 The slide should be generated only after this storyboard is clear.
+
+## Design Philosophy
+
+- One Slide One Message.
+- Visual First: every non-cover slide has a visual subject covering at least 40% of the page.
+- Visual Hierarchy: title > visual > explanation.
+- Whitespace First: do not fill every empty region.
+- Story First: Problem -> Challenge -> Idea -> Method -> Result -> Takeaway.
+- Audience First: optimize for the 5-second memory.
+- Layout Quality: prefer 15 clear slides over 10 crowded slides.
+
+When a reference PPT is provided, learn only design philosophy: layout rhythm, whitespace, density, visual hierarchy, and story pacing. Do not copy colors, fonts, or theme.
+
+Concrete patterns to learn from strong technical decks:
+
+- stable master frame: repeated title zone, section label, page marker, and subtle divider/rail;
+- clear title hierarchy: title is visually dominant and states the message;
+- visual-text zoning: main visual and explanation text live in separate zones;
+- disciplined whitespace: margins and empty regions are preserved intentionally;
+- limited color roles: colors have roles rather than decorative randomness;
+- chapter rhythm: repeated orientation elements guide the audience;
+- technical visual priority: use diagrams, workflows, timelines, comparison panels, and plots before prose.
 
 ## Slide Architect
 
@@ -184,14 +216,17 @@ Default style:
 
 ```json
 {
-  "primary_color": "2563EB",
+  "primary_color": "111827",
+  "secondary_color": "2563EB",
   "accent_color": "DC2626",
   "neutral_color": "6B7280",
-  "title_font": "Arial",
-  "body_font": "Arial",
+  "light_color": "F8FAFC",
+  "title_font": "Microsoft YaHei",
+  "body_font": "Microsoft YaHei",
   "title_size": 32,
   "body_size": 20,
   "layout": "auto",
+  "design_system": "academic-rail",
   "animation": "disable"
 }
 ```

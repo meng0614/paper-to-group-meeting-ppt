@@ -103,7 +103,42 @@ def infer_column(page: PageText, caption: Line, mode: str) -> tuple[float, float
     return (mid + gutter, page.width - margin) if center >= mid else (margin, mid - gutter)
 
 
-def find_visual_band(gray: Image.Image, x1: int, y1: int, x2: int, y2: int) -> tuple[int, int, int, int]:
+def split_groups(indices: list[int], gap: int) -> list[tuple[int, int]]:
+    if not indices:
+        return []
+    groups: list[tuple[int, int]] = []
+    start = prev = indices[0]
+    for idx in indices[1:]:
+        if idx - prev > gap:
+            groups.append((start, prev + 1))
+            start = idx
+        prev = idx
+    groups.append((start, prev + 1))
+    return groups
+
+
+def choose_column_group(groups: list[tuple[int, int]], focus_x: int | None, width: int) -> tuple[int, int] | None:
+    if not groups:
+        return None
+    if focus_x is None:
+        return max(groups, key=lambda g: g[1] - g[0])
+    focus_x = max(0, min(width, focus_x))
+    chosen = min(groups, key=lambda g: 0 if g[0] <= focus_x <= g[1] else min(abs(focus_x - g[0]), abs(focus_x - g[1])))
+    idx = groups.index(chosen)
+    left, right = chosen
+    # Merge nearby subfigure fragments, but do not jump across large text/figure gaps.
+    j = idx - 1
+    while j >= 0 and left - groups[j][1] <= max(32, int(width * 0.06)):
+        left = groups[j][0]
+        j -= 1
+    j = idx + 1
+    while j < len(groups) and groups[j][0] - right <= max(32, int(width * 0.06)):
+        right = groups[j][1]
+        j += 1
+    return left, right
+
+
+def find_visual_band(gray: Image.Image, x1: int, y1: int, x2: int, y2: int, focus_x: int | None = None) -> tuple[int, int, int, int]:
     region = gray.crop((x1, y1, x2, y2))
     w, h = region.size
     pix = region.load()
@@ -114,14 +149,7 @@ def find_visual_band(gray: Image.Image, x1: int, y1: int, x2: int, y2: int) -> t
             rows.append(y)
     if not rows:
         return x1, y1, x2, y2
-    groups = []
-    start = prev = rows[0]
-    for row in rows[1:]:
-        if row - prev > 42:
-            groups.append((start, prev))
-            start = row
-        prev = row
-    groups.append((start, prev))
+    groups = [(g1, g2 - 1) for g1, g2 in split_groups(rows, 42)]
     # Pick the content band closest to the caption and merge nearby subfigure bands.
     sel_start, sel_end = groups[-1]
     for g_start, g_end in reversed(groups[:-1]):
@@ -141,8 +169,15 @@ def find_visual_band(gray: Image.Image, x1: int, y1: int, x2: int, y2: int) -> t
         if dark > max(2, int(bh * 0.006)):
             cols.append(x)
     if cols:
-        cx1 = max(0, min(cols) - 8)
-        cx2 = min(w, max(cols) + 9)
+        col_groups = split_groups(cols, max(22, int(w * 0.035)))
+        local_focus = None if focus_x is None else focus_x - x1
+        chosen = choose_column_group(col_groups, local_focus, w)
+        if chosen:
+            cx1 = max(0, chosen[0] - 8)
+            cx2 = min(w, chosen[1] + 8)
+        else:
+            cx1 = max(0, min(cols) - 8)
+            cx2 = min(w, max(cols) + 9)
     else:
         cx1, cx2 = 0, w
     return x1 + cx1, y1 + cy1, x1 + cx2, y1 + cy2
@@ -176,7 +211,8 @@ def crop_one(pdf: Path, pages_dir: Path, out_dir: Path, item: dict, dpi_hint: in
     search_x2 = max(search_x1 + 1, min(search_x2, img_w))
 
     gray = page_img.convert("L")
-    x1, y1, x2, y2 = find_visual_band(gray, search_x1, search_y1, search_x2, search_y2)
+    focus_x = int(((caption.x1 + caption.x2) / 2) * sx)
+    x1, y1, x2, y2 = find_visual_band(gray, search_x1, search_y1, search_x2, search_y2, focus_x=focus_x)
     x1 = max(0, x1 - pad)
     y1 = max(0, y1 - pad)
     x2 = min(img_w, x2 + pad)

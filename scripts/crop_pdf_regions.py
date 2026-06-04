@@ -42,6 +42,98 @@ def trim_white_margin(im: Image.Image, threshold: int = 246, pad: int = 8) -> Im
     return im.crop((x1, y1, x2, y2))
 
 
+def projection_groups(values: list[int], min_value: int, merge_gap: int) -> list[tuple[int, int]]:
+    indices = [idx for idx, value in enumerate(values) if value >= min_value]
+    if not indices:
+        return []
+    groups: list[tuple[int, int]] = []
+    start = prev = indices[0]
+    for idx in indices[1:]:
+        if idx - prev > merge_gap:
+            groups.append((start, prev + 1))
+            start = idx
+        prev = idx
+    groups.append((start, prev + 1))
+    return groups
+
+
+def choose_group(groups: list[tuple[int, int]], seed_start: int, seed_end: int, total: int) -> tuple[int, int] | None:
+    if not groups:
+        return None
+    seed_center = (seed_start + seed_end) / 2
+
+    def score(group: tuple[int, int]) -> tuple[float, float, float]:
+        g1, g2 = group
+        overlap = max(0, min(g2, seed_end) - max(g1, seed_start))
+        center = (g1 + g2) / 2
+        width = g2 - g1
+        return (overlap, -abs(center - seed_center), width)
+
+    chosen = max(groups, key=score)
+    idx = groups.index(chosen)
+    left, right = chosen
+    merge_gap = max(24, int(total * 0.10))
+
+    def overlaps_seed(group: tuple[int, int]) -> bool:
+        return max(0, min(group[1], seed_end) - max(group[0], seed_start)) > 0
+
+    j = idx - 1
+    while j >= 0 and left - groups[j][1] <= merge_gap and overlaps_seed(groups[j]):
+        left = groups[j][0]
+        j -= 1
+    j = idx + 1
+    while j < len(groups) and groups[j][0] - right <= merge_gap and overlaps_seed(groups[j]):
+        right = groups[j][1]
+        j += 1
+    chosen = (left, right)
+    if chosen[1] - chosen[0] < total * 0.06:
+        return None
+    return chosen
+
+
+def seed_aware_clean(
+    im: Image.Image,
+    seed_box: tuple[int, int, int, int] | None,
+    threshold: int = 245,
+    pad: int = 12,
+) -> Image.Image:
+    if seed_box is None:
+        return im
+    gray = im.convert("L")
+    w, h = gray.size
+    if w < 80 or h < 80:
+        return im
+    pix = gray.load()
+    dark_cols = [sum(1 for y in range(h) if pix[x, y] < threshold) for x in range(w)]
+    dark_rows = [sum(1 for x in range(w) if pix[x, y] < threshold) for y in range(h)]
+    col_groups = projection_groups(dark_cols, max(3, int(h * 0.008)), max(12, int(w * 0.025)))
+    row_groups = projection_groups(dark_rows, max(3, int(w * 0.008)), max(12, int(h * 0.025)))
+
+    sx1, sy1, sx2, sy2 = seed_box
+    sx1, sx2 = clamp(sx1, 0, w), clamp(sx2, 0, w)
+    sy1, sy2 = clamp(sy1, 0, h), clamp(sy2, 0, h)
+    chosen_col = choose_group(col_groups, sx1, sx2, w)
+    chosen_row = choose_group(row_groups, sy1, sy2, h)
+    if chosen_col is None and chosen_row is None:
+        return im
+    x1, y1, x2, y2 = 0, 0, w, h
+    if chosen_col is not None:
+        x1, x2 = chosen_col
+    if chosen_row is not None:
+        y1, y2 = chosen_row
+    x1 = clamp(x1 - pad, 0, w)
+    y1 = clamp(y1 - pad, 0, h)
+    x2 = clamp(x2 + pad, 0, w)
+    y2 = clamp(y2 + pad, 0, h)
+    new_w, new_h = x2 - x1, y2 - y1
+    if new_w < w * 0.35 or new_h < h * 0.35:
+        return im
+    # Only apply when it actually removes suspicious neighboring material.
+    if new_w > w * 0.93 and new_h > h * 0.93:
+        return im
+    return im.crop((x1, y1, x2, y2))
+
+
 def edge_touches_content(im: Image.Image, threshold: int = 246, margin: int = 8, ratio: float = 0.015) -> dict[str, bool]:
     gray = im.convert("L")
     w, h = gray.size
@@ -98,13 +190,15 @@ def component_expand_box(
     dilate_size: int = 13,
     dilate_rounds: int = 2,
     output_pad: int = 10,
+    header_guard: int = 76,
+    footer_guard: int = 40,
 ) -> tuple[int, int, int, int]:
     page_w, page_h = im.size
     sx1, sy1, sx2, sy2 = seed_box
     wx1 = clamp(sx1 - search_pad, 0, page_w)
-    wy1 = clamp(sy1 - search_pad, 0, page_h)
+    wy1 = clamp(max(sy1 - search_pad, header_guard), 0, page_h)
     wx2 = clamp(sx2 + search_pad, 0, page_w)
-    wy2 = clamp(sy2 + search_pad, 0, page_h)
+    wy2 = clamp(min(sy2 + search_pad, page_h - footer_guard), 0, page_h)
     region = im.crop((wx1, wy1, wx2, wy2)).convert("L")
     mask = region.point(lambda p: 255 if p < threshold else 0)
     for _ in range(max(0, dilate_rounds)):
@@ -184,12 +278,19 @@ def upscale_if_needed(im: Image.Image, min_width: int, min_height: int) -> Image
     return im.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
 
 
-def crop_region(page_path: Path, box, out_path: Path, padding: int, trim: bool, min_width: int, min_height: int, auto_expand: bool, expand_step: int, max_expand_rounds: int, component_expand: bool, search_pad: int) -> None:
+def crop_region(page_path: Path, box, out_path: Path, padding: int, trim: bool, min_width: int, min_height: int, auto_expand: bool, expand_step: int, max_expand_rounds: int, component_expand: bool, search_pad: int, header_guard: int, footer_guard: int, clean_edges: bool) -> None:
     im = Image.open(page_path).convert("RGB")
     w, h = im.size
     x1, y1, x2, y2 = normalize_box(box, w, h)
+    seed_box = (x1, y1, x2, y2)
     if component_expand:
-        x1, y1, x2, y2 = component_expand_box(im, (x1, y1, x2, y2), search_pad=search_pad)
+        x1, y1, x2, y2 = component_expand_box(
+            im,
+            (x1, y1, x2, y2),
+            search_pad=search_pad,
+            header_guard=header_guard,
+            footer_guard=footer_guard,
+        )
     x1 = clamp(x1 - padding, 0, w)
     y1 = clamp(y1 - padding, 0, h)
     x2 = clamp(x2 + padding, 0, w)
@@ -199,6 +300,14 @@ def crop_region(page_path: Path, box, out_path: Path, padding: int, trim: bool, 
     if x2 <= x1 or y2 <= y1:
         raise ValueError(f"Invalid crop box {box} for {page_path}")
     cropped = im.crop((x1, y1, x2, y2))
+    if clean_edges:
+        rel_seed = (
+            seed_box[0] - x1,
+            seed_box[1] - y1,
+            seed_box[2] - x1,
+            seed_box[3] - y1,
+        )
+        cropped = seed_aware_clean(cropped, rel_seed)
     if trim:
         cropped = trim_white_margin(cropped)
     cropped = upscale_if_needed(cropped, min_width, min_height)
@@ -215,9 +324,12 @@ def main():
     ap.add_argument("--auto-expand", action="store_true", help="Expand crop edges automatically when content touches the crop boundary.")
     ap.add_argument("--component-expand", action="store_true", help="Crop the connected visual component intersecting the seed box; helps recover complete paper figures while excluding page headers/text.")
     ap.add_argument("--search-pad", type=int, default=280, help="Search padding for component expansion.")
+    ap.add_argument("--header-guard", type=int, default=76, help="Top page pixels excluded from component expansion to avoid page headers.")
+    ap.add_argument("--footer-guard", type=int, default=40, help="Bottom page pixels excluded from component expansion to avoid footers.")
     ap.add_argument("--expand-step", type=int, default=60, help="Pixels added per auto-expand round on touched edges.")
     ap.add_argument("--max-expand-rounds", type=int, default=8, help="Maximum edge-expansion rounds.")
     ap.add_argument("--trim", action="store_true", help="Trim large white margins after cropping.")
+    ap.add_argument("--no-clean-edges", action="store_true", help="Disable seed-aware cleanup that removes neighboring body text, page headers, and caption fragments.")
     ap.add_argument("--min-width", type=int, default=900, help="Upscale small crops to at least this width.")
     ap.add_argument("--min-height", type=int, default=420, help="Upscale small crops to at least this height.")
     args = ap.parse_args()
@@ -241,6 +353,9 @@ def main():
             int(item.get("max_expand_rounds", args.max_expand_rounds)),
             args.component_expand or bool(item.get("component_expand")),
             int(item.get("search_pad", args.search_pad)),
+            int(item.get("header_guard", args.header_guard)),
+            int(item.get("footer_guard", args.footer_guard)),
+            bool(item.get("clean_edges", not args.no_clean_edges)),
         )
         print(out_path)
 

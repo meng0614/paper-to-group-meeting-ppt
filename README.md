@@ -10,7 +10,29 @@ The workflow:
 paper understanding -> visual storyboard -> section architect -> visualizer -> HTML report + editable PPTX -> layout/figure validators -> professor review -> refined outputs
 ```
 
-It does not only summarize a paper. The default strategy is **Presentation-first / Visual-first**: every section starts with Page Goal, Visual, and Content. The report should help someone who has not read the paper understand the motivation, problem, core idea, why it works, and whether experiments support it in 10-15 minutes.
+It does not only summarize a paper. The default strategy is **Presentation-first / Visual-first**: every section starts with Story Phase, One Message, 5-second takeaway, Visual, and Content. The report should help someone who has not read the paper understand the motivation, problem, core idea, why it works, and whether experiments support it in 10-15 minutes.
+
+The design philosophy is:
+
+```text
+One Slide One Message
+Visual First: visual subject area >= 40%
+Visual Hierarchy: title > visual > explanation
+Whitespace First
+Story First: Problem -> Challenge -> Idea -> Method -> Result -> Takeaway
+Audience First: what should the audience remember in 5 seconds?
+Layout Quality: add pages instead of crowding content
+```
+
+When a polished reference PPT is provided, the skill learns design philosophy only, not colors or fonts. Transferable patterns include:
+
+- stable master frame: repeated title zone, section label, page marker, and subtle divider/rail;
+- clear title hierarchy: the slide headline carries the message;
+- visual-text zoning: main visual and explanation text have predictable zones;
+- disciplined whitespace: margins and empty space are preserved;
+- limited color roles: primary, structural accent, highlight, neutral annotation;
+- chapter rhythm: repeated orientation elements help the audience follow the talk;
+- technical visual priority: diagrams, workflows, timelines, comparison panels, and plots before paragraphs.
 
 It supports a Generator/Discriminator refinement loop:
 
@@ -57,7 +79,7 @@ paper_ppt_project/
 ## Skill Capabilities
 
 - Understand the paper structure: problem, motivation, method, experiments, results, limitations.
-- Create a visual storyboard with Page Goal / Visual / Content for every slide.
+- Create a visual storyboard with Story Phase / One Message / 5-second takeaway / Visual / Content for every slide.
 - Plan slide count and page capacity with a Slide Architect before rendering.
 - Extract and crop useful visual evidence from PDFs.
 - Redraw or simplify selected visuals as comparisons, pipelines, flows, and result bars.
@@ -68,6 +90,7 @@ paper_ppt_project/
 - Support MathJax formulas, pseudocode, foldable long text, scrollable tables, and dynamic result bars.
 - Generate speaker notes.
 - Rotate among figure-first, left-right, top-visual, flow, comparison, and result-focus layouts to avoid repetitive pages.
+- Choose layouts by story phase: Problem/Challenge -> comparison or bottleneck; Idea/Method -> framework or pipeline; Result -> enlarged chart plus So What; Takeaway -> contribution/novelty/limitation.
 - Check cropped figures for low resolution, likely incomplete crops, excessive whitespace, blur, and low contrast.
 - Coordinate with existing paper-reading and slide-design skills when available.
 - Optionally use external figure extraction backends such as PDFFigures2, GROBID, PyMuPDF, or LayoutParser when installed. See `references/figure_extraction_backends.md`.
@@ -76,6 +99,7 @@ paper_ppt_project/
 
 ```text
 scripts/render_pdf_pages.py       Render PDF pages to PNG with pdftoppm at PPT-readable DPI.
+scripts/extract_reference_design_philosophy.py Learn reference PPT layout philosophy without copying colors/fonts.
 scripts/crop_pdf_figures_by_caption.py Caption-aware figure cropper using pdftotext bbox coordinates.
 scripts/crop_pdf_regions.py       Manual clean-box cropper with padding, trimming, and upscaling.
 scripts/figure_quality_validator.py Check cropped figure readability and likely crop mistakes.
@@ -126,6 +150,12 @@ Crop figures by caption whenever possible:
 python scripts/crop_pdf_figures_by_caption.py --pdf paper.pdf --pages output/pages --spec caption_crop_specs.json --out output/figures
 ```
 
+If external scholarly extraction tools are installed, prefer them before manual screenshots:
+
+- PDFFigures2: extracts scholarly figures, tables, captions, and figure boxes.
+- GROBID coordinates: useful when TEI/JSON figure coordinates are available.
+- PyMuPDF: useful for high-DPI clipped rendering once a clean rectangle is known.
+
 Example caption spec:
 
 ```json
@@ -146,6 +176,12 @@ Connected-component repair is a last-resort fallback for a single problematic fi
 python scripts/crop_pdf_regions.py --pages output/pages --spec one_figure_crop.json --out output/figures --component-expand --search-pad 320 --min-width 1000
 ```
 
+`crop_pdf_regions.py` now applies seed-aware edge cleanup by default. It tries to remove page headers, neighboring body text, and caption fragments while preserving the visual region around the original seed box. Disable it only for unusual multi-panel figures:
+
+```bash
+python scripts/crop_pdf_regions.py --pages output/pages --spec one_figure_crop.json --out output/figures --no-clean-edges
+```
+
 Check cropped figure quality:
 
 ```bash
@@ -162,6 +198,12 @@ Build editable PPTX:
 
 ```bash
 python scripts/build_editable_pptx_from_spec.py --spec output/intermediate/slide_specs.json --out output
+```
+
+Learn reference PPT design philosophy without copying colors or fonts:
+
+```bash
+python scripts/extract_reference_design_philosophy.py --reference reference.pptx --out output/intermediate/reference_design_philosophy.json
 ```
 
 Run Slide Architect before building:
@@ -199,7 +241,11 @@ Each section in `slide_specs.json` should include:
 
 ```json
 {
+  "story_phase": "Problem | Challenge | Idea | Method | Result | Takeaway",
+  "one_message": "The single core claim of this slide",
+  "audience_takeaway": "What should the audience remember in 5 seconds?",
   "page_goal": "What should the audience understand in 5 seconds?",
+  "visual_area_min": 0.4,
   "visual": {
     "type": "comparison | pipeline | flow | result_bar | concept"
   },
@@ -209,6 +255,10 @@ Each section in `slide_specs.json` should include:
 
 Visual-first rules:
 
+- Do not copy the reference PPT's colors or fonts.
+- Build the deck as Problem -> Challenge -> Idea -> Method -> Result -> Takeaway.
+- Every slide should have one message and one visual center.
+- The visual subject should occupy at least 40% of the page.
 - Background slides should use scenario/system/statistics visuals, not text only.
 - Problem slides should use Existing vs Paper Setting or bottleneck diagrams.
 - Method slides should use framework, pipeline, workflow, or architecture diagrams.

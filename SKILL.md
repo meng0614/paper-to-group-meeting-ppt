@@ -15,9 +15,15 @@ paper understanding -> visual storyboard -> section architect -> visualizer -> H
 
 The output should be a usable HTML report for a human presenter, not merely a paper summary.
 
-The default strategy is **Presentation-first / Visual-first**, not Text-first. Before creating every section, write:
+The default strategy is **Presentation-first / Visual-first**, not Text-first. Act like a McKinsey consultant, top-conference author, and professional PPT designer: design the page first, then fill content. Before creating every section, write:
 
 ```text
+Story Phase:
+Problem / Challenge / Idea / Method / Result / Takeaway
+
+One Message:
+The single core claim of this slide.
+
 Page Goal:
 What should the audience understand if they see this slide for only 5 seconds?
 
@@ -29,6 +35,16 @@ What minimal text is needed to support that visual?
 ```
 
 Only after these three fields are clear should the section be rendered.
+
+Hard design principles:
+
+- One Slide One Message: one core claim per slide.
+- Visual First: every non-cover slide must have a visual subject occupying at least 40% of the page.
+- Visual Hierarchy: title > visual > explanation.
+- Whitespace First: do not fill empty space with text.
+- Story First: organize the deck as Problem -> Challenge -> Idea -> Method -> Result -> Takeaway, not by paper section order.
+- Audience First: every slide must answer the 5-second takeaway question.
+- Layout Quality: add pages instead of compressing content.
 
 ## Section Architect
 
@@ -105,15 +121,23 @@ paper_ppt_project/
 
 ## Workflow
 
-Read `references/academic_presentation_agent.md` when the user asks for an optimized, iterative, professor-reviewed, or high-quality deck.
+Read `references/academic_presentation_agent.md` and `references/presentation_design_philosophy.md` when the user asks for an optimized, iterative, professor-reviewed, or high-quality deck.
 
-If the user provides a beautiful reference PPT, treat it as a style guide. Extract its dominant colors and fonts before rendering:
+If the user provides a beautiful reference PPT, do not copy its colors or fonts. Learn only its design philosophy:
+
+- stable master frame: repeated title zone, section label, page marker, rail/divider, or other orientation elements;
+- clear title hierarchy: assertion headline is visually strongest;
+- visual-text zoning: the main visual and explanation text have separate, predictable zones;
+- disciplined whitespace: margins and empty space are preserved intentionally;
+- limited color roles: colors are used as structural, highlight, and neutral roles instead of page-by-page decoration;
+- chapter rhythm: repeated orientation elements make the story easy to follow;
+- technical visual priority: systems, algorithms, and results are explained through diagrams and plots before prose.
 
 ```powershell
-python scripts/extract_reference_style.py --reference reference.pptx --out paper_ppt_project/intermediate/reference_style.json
+python scripts/extract_reference_design_philosophy.py --reference reference.pptx --out paper_ppt_project/intermediate/reference_design_philosophy.json
 ```
 
-Then copy the JSON object into `intermediate/slide_specs.json` under the top-level `style` key. The bundled renderer uses this style for the deck theme, title bar, accent line, font family, colors, and HTML preview.
+Use the resulting JSON as a planning constraint, not a visual theme. The bundled renderer must not copy reference colors, fonts, or theme.
 
 ### 1. Paper Understanding
 
@@ -144,9 +168,10 @@ Use `scripts/render_pdf_pages.py` to render PDF pages into PNGs if page images d
 
 Default figure extraction order:
 
-1. caption-aware crop with `scripts/crop_pdf_figures_by_caption.py`;
-2. manually confirmed clean crop box with `scripts/crop_pdf_regions.py`;
-3. connected-component expansion only as a single-figure fallback.
+1. optional scholarly figure extractor if installed, especially PDFFigures2 or GROBID coordinates;
+2. caption-aware crop with `scripts/crop_pdf_figures_by_caption.py`;
+3. manually confirmed clean crop box with `scripts/crop_pdf_regions.py`;
+4. connected-component expansion only as a single-figure fallback.
 
 Create `intermediate/figures_index.md`:
 
@@ -173,7 +198,7 @@ python scripts/crop_pdf_regions.py --pages paper_ppt_project/pages --spec crop_s
 python scripts/figure_quality_validator.py --figures paper_ppt_project/figures --report paper_ppt_project/figure_quality_report.md
 ```
 
-If `figure_quality_report.md` flags `possible_incomplete_crop`, re-crop with a larger clean box or caption-aware crop. If it flags `low_resolution`, re-render pages at a higher DPI before cropping.
+If `figure_quality_report.md` flags `possible_incomplete_crop`, re-crop with a larger clean box or caption-aware crop. If it flags `possible_neighbor_text`, the crop likely includes adjacent body text, caption fragments, or page headers; re-crop with caption-aware cropping or enable the seed-aware clean-edge cropper. If it flags `low_resolution`, re-render pages at a higher DPI before cropping.
 
 For complex framework figures, connected-component repair may help, but use it only for one specific figure after visual inspection:
 
@@ -191,27 +216,26 @@ For each page in `visual_storyboard.md`, include:
 
 ```markdown
 ## Slide N
+- Story Phase:
+- One Message:
 - Page Goal:
 - Visual:
+- Visual Area Target: >= 40%
 - Content:
 ```
 
-Default academic structure:
+Default story-first academic structure:
 
-1. Title
-2. Research Background
-3. Problem Statement
-4. Motivation
-5. Challenges
-6. Key Idea
-7. System Framework / Pipeline
-8. Method Details
-9. Experimental Setup
-10. Experimental Results
-11. Discussion
-12. Limitations
-13. Future Work
-14. Takeaways
+1. Title / one-sentence positioning
+2. Problem: why this work matters
+3. Challenge: why existing approaches fail
+4. Idea: the core insight
+5. Method: how the idea is implemented
+6. Method Detail / Example
+7. Experiment: how the claim is tested
+8. Result: what changed
+9. Result Insight: So What
+10. Takeaway: contribution, novelty, limitation
 
 For multiple papers, use: per-paper brief reading -> comparison matrix -> shared takeaways.
 
@@ -259,13 +283,18 @@ Visual-first rules:
 - Every result visual must answer "So What?".
 - Takeaways must explicitly state maximum contribution, maximum novelty, and maximum limitation.
 
-- primary color default `#0E2557`;
-- secondary color default `#4B649F`;
-- accent color default `#FF0000`;
-- neutral color default `#6B7280`;
-- light background default `#F4F7FB`;
-- title font default `Microsoft YaHei`;
-- body font default `Microsoft YaHei`;
+Design-system rules learned from strong technical PPTs:
+
+- use a stable academic master frame for every slide;
+- keep a fixed title zone and section kicker;
+- use repeated orientation elements, but vary content layouts by story phase;
+- Problem/Challenge pages should favor comparison or bottleneck visuals;
+- Idea/Method pages should favor framework, pipeline, workflow, or architecture visuals;
+- Result pages should favor enlarged charts and explicit "So What" annotations;
+- never let figure captions, source text, or auxiliary bullets compete with the main visual.
+
+- do not copy reference PPT colors or fonts;
+- use the built-in restrained academic palette unless the user explicitly configures another one;
 - title size 28-36 pt;
 - body size 18-24 pt;
 - assertion headlines;
@@ -337,6 +366,7 @@ Read these references when deeper guidance is needed:
 
 - `references/generator_discriminator_loop.md`
 - `references/academic_presentation_agent.md`
+- `references/presentation_design_philosophy.md`
 - `references/refinement_loop.md`
 - `references/reviewer_rubric.md`
 - `references/figure_extraction_backends.md`
