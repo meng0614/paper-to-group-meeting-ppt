@@ -183,9 +183,9 @@ def revise_spec(spec: dict, report: dict) -> dict:
         sec.setdefault("content", "")
         if not has_visual(sec):
             sec["visual"] = {"type": "concept", "headline": sec.get("page_goal") or sec.get("title", "")}
-        if text_len(sec.get("content")) > 1400 and not sec.get("details"):
-            sec["details"] = sec["content"][700:]
-            sec["content"] = sec["content"][:700]
+        if text_len(sec.get("content")) > 520 and not sec.get("details"):
+            sec["details"] = sec["content"][320:]
+            sec["content"] = sec["content"][:320]
         if sec.get("kind") == "result" and sec.get("visual", {}).get("type") == "result_bar":
             sec["visual"].setdefault("so_what", "So What: the key metric improves and supports the paper claim.")
         sec.setdefault("notes", f"Source: section {idx} visual report plan.")

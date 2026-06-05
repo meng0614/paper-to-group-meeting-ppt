@@ -403,9 +403,9 @@ def render_slide(sec: dict, idx: int, out_dir: Path, style: dict, image_rids: di
     title_info = title_layout(sec, style)
     shapes = background_chrome(ids, style)
     layout = choose_layout(sec, idx)
-    text_items = [clip_by_units(item, 58) for item in (sec.get("bullets") or [])[:3]]
+    text_items = [clip_by_units(item, 46) for item in (sec.get("bullets") or [])[:3]]
     body = sec.get("body") or sec.get("content") or ""
-    body = clip_by_units(body, 125)
+    body = clip_by_units(body, 82)
 
     top = max(1540000, int(title_info["content_top"]))
     bottom = 6220000
@@ -445,9 +445,15 @@ def render_slide(sec: dict, idx: int, out_dir: Path, style: dict, image_rids: di
     cursor_y = ty + takeaway_h + 170000
     remaining = ty + th - cursor_y
     if body and layout != "full-visual" and remaining > 520000:
-        body_h = min(text_height(body, tw, 13.8, min_h=380000, max_h=880000), remaining)
-        shapes.append(text_box(ids, tx, cursor_y, tw, body_h, body, 13.8, "222831", style["body_font"]))
-        cursor_y += body_h + 160000
+        body_limit = 82
+        body_h = text_height(body, tw, 13.8, min_h=380000, max_h=880000)
+        while body_h > remaining and body_limit > 34:
+            body_limit -= 12
+            body = clip_by_units(body, body_limit)
+            body_h = text_height(body, tw, 13.8, min_h=380000, max_h=880000)
+        if body_h <= remaining:
+            shapes.append(text_box(ids, tx, cursor_y, tw, body_h, body, 13.8, "222831", style["body_font"]))
+            cursor_y += body_h + 160000
     remaining = ty + th - cursor_y
     if text_items and layout not in {"full-visual", "visual-top"}:
         bullet_items = text_items[:2]

@@ -48,7 +48,7 @@ def likely_neighbor_text(gray: Image.Image, threshold: int = 245) -> bool:
 
     left_bands = band_count(0, strip_w)
     right_bands = band_count(w - strip_w, w)
-    return max(left_bands, right_bands) >= 14
+    return max(left_bands, right_bands) >= 22
 
 
 def analyze_image(path: Path) -> dict:

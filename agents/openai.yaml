@@ -1,4 +1,4 @@
 interface:
-  display_name: "Paper to Group Meeting PPT"
-  short_description: "Generate academic group-meeting PPTs from research paper PDFs."
-  default_prompt: "Generate a simple group-meeting presentation from the provided research paper PDF, including paper understanding, cropped figures/tables/algorithms, PPTX, HTML preview, and speaker notes."
+  display_name: "Academic Presentation Agent"
+  short_description: "Turn research papers into research-understanding-driven HTML reports and editable PPTX decks."
+  default_prompt: "Generate a visual-first group-meeting presentation from the provided research paper PDF. Ask for or infer the target language (zh/en), build the Research Understanding Engine artifacts, then create cropped visual evidence, HTML/PPTX outputs, language/layout checks, expert review, and speaker notes."

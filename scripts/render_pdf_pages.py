@@ -5,6 +5,20 @@ import subprocess
 from pathlib import Path
 
 
+def normalize_page_names(out_dir: Path) -> None:
+    for path in sorted(out_dir.glob("page-*.png")):
+        stem = path.stem
+        suffix = stem.rsplit("-", 1)[-1]
+        if not suffix.isdigit():
+            continue
+        target = out_dir / f"page-{int(suffix):02d}.png"
+        if target == path:
+            continue
+        if target.exists():
+            target.unlink()
+        path.rename(target)
+
+
 def render_with_pdftoppm(pdf: Path, out_dir: Path, dpi: int) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     prefix = out_dir / "page"
@@ -12,6 +26,7 @@ def render_with_pdftoppm(pdf: Path, out_dir: Path, dpi: int) -> None:
     if not exe:
         raise RuntimeError("pdftoppm not found. Install Poppler or TeX Live tools, or render PDF pages manually.")
     subprocess.run([exe, "-png", "-r", str(dpi), str(pdf), str(prefix)], check=True)
+    normalize_page_names(out_dir)
 
 
 def main():

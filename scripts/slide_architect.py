@@ -3,21 +3,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from copy import deepcopy
 from pathlib import Path
 
 
 CAPACITY = {
-    "cover": {"bullets": 3, "chars": 160, "steps": 3},
-    "background": {"bullets": 2, "chars": 180, "steps": 4},
-    "problem": {"bullets": 2, "chars": 170, "steps": 4},
-    "method": {"bullets": 2, "chars": 180, "steps": 4},
-    "algorithm": {"bullets": 2, "chars": 170, "steps": 4},
-    "experiment": {"bullets": 2, "chars": 170, "steps": 4},
-    "result": {"bullets": 2, "chars": 170, "steps": 4},
-    "figure": {"bullets": 3, "chars": 190, "steps": 4},
-    "closing": {"bullets": 3, "chars": 190, "steps": 4},
-    "content": {"bullets": 3, "chars": 170, "steps": 4},
+    "cover": {"bullets": 3, "chars": 360, "steps": 3},
+    "background": {"bullets": 2, "chars": 360, "steps": 4},
+    "problem": {"bullets": 2, "chars": 340, "steps": 4},
+    "motivation": {"bullets": 2, "chars": 340, "steps": 4},
+    "method": {"bullets": 2, "chars": 360, "steps": 4},
+    "algorithm": {"bullets": 2, "chars": 340, "steps": 4},
+    "experiment": {"bullets": 2, "chars": 340, "steps": 4},
+    "result": {"bullets": 2, "chars": 340, "steps": 4},
+    "figure": {"bullets": 3, "chars": 400, "steps": 4},
+    "closing": {"bullets": 3, "chars": 360, "steps": 4},
+    "content": {"bullets": 3, "chars": 340, "steps": 4},
 }
 
 STORY_ORDER = ["Problem", "Challenge", "Idea", "Method", "Result", "Takeaway"]
@@ -49,8 +51,45 @@ SPLIT_TITLES = {
 }
 
 
+DETAIL_TITLES_ZH = {
+    "cover": "论文一句话：研究对象、核心转向、验证逻辑",
+    "background": "背景细节：需求如何变成技术瓶颈",
+    "problem": "瓶颈细节：旧方法为什么不够",
+    "motivation": "动机细节：旧范式如何转向本文动作",
+    "method": "方法细节：核心机制和输入输出",
+    "algorithm": "机制细节：决策流程如何成立",
+    "experiment": "实验细节：设置、基线、指标",
+    "result": "结果细节：证据如何支撑 claim",
+    "closing": "总结细节：贡献、创新与边界",
+    "content": "补充说明：支撑本页核心观点",
+}
+
+DETAIL_TITLES_EN = {
+    "cover": "Paper in One Sentence: Object, Move, Evidence",
+    "background": "Background Detail: From Demand to Bottleneck",
+    "problem": "Bottleneck Detail: Why Existing Work Is Insufficient",
+    "motivation": "Motivation Detail: From Old Paradigm to Paper Move",
+    "method": "Method Detail: Mechanism, Inputs, Outputs",
+    "algorithm": "Mechanism Detail: Why the Decision Flow Holds",
+    "experiment": "Experiment Detail: Setup, Baselines, Metrics",
+    "result": "Result Detail: Evidence to Claim",
+    "closing": "Takeaway Detail: Contribution, Novelty, Boundary",
+    "content": "Supporting Detail: Evidence Behind the Message",
+}
+
+
 def text_len(value) -> int:
     return len(str(value or "").strip())
+
+
+def has_cjk(value: str) -> bool:
+    return bool(re.search(r"[\u4e00-\u9fff]", str(value or "")))
+
+
+def detail_title(slide: dict) -> str:
+    kind = str(slide.get("kind", "content")).lower()
+    titles = DETAIL_TITLES_ZH if has_cjk(slide.get("title", "") + slide.get("content", "")) else DETAIL_TITLES_EN
+    return titles.get(kind, titles["content"])
 
 
 def compact_title(value: str, limit: int = 34) -> str:
@@ -155,6 +194,8 @@ def compact_slide(slide: dict) -> dict:
 
 
 def split_slide(slide: dict) -> list[dict]:
+    if str(slide.get("title", "")).lower().startswith("details:"):
+        return [compact_slide(slide)]
     if not overloaded(slide):
         return [compact_slide(slide)]
 
@@ -192,7 +233,8 @@ def split_slide(slide: dict) -> list[dict]:
     overview = compact_slide(slide)
     overview["content"] = str(overview.get("content", ""))[:120]
     detail = compact_slide(slide)
-    detail["title"] = f"Details: {compact_title(slide.get('title', kind.title()))}"
+    detail["title"] = detail_title(slide)
+    detail["one_message"] = detail["title"]
     detail["page_goal"] = slide.get("page_goal") or "Explain the supporting detail without crowding the overview slide."
     detail["audience_takeaway"] = slide.get("audience_takeaway") or detail["page_goal"]
     detail["visual"] = {

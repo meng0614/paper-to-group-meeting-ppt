@@ -10,7 +10,7 @@ Create a general Academic Presentation Agent for arbitrary research papers. Do n
 The skill's core promise is:
 
 ```text
-paper understanding -> visual storyboard -> section architect -> visualizer -> HTML report + editable PPTX -> layout/figure validators -> professor review -> refined outputs
+research understanding engine -> visual storyboard -> section architect -> visualizer -> HTML report + editable PPTX -> layout/figure validators -> professor review -> refined outputs
 ```
 
 The output should be a usable HTML report for a human presenter, not merely a paper summary.
@@ -101,12 +101,23 @@ paper_ppt_project/
     alg_01_main.png
     table_01_setup.png
   intermediate/
+    research_understanding.json
+    domain_primer.md
+    motivation_chain.json
+    gap_analysis.json
+    contribution_cards.json
+    method_model.json
+    why_effective.md
+    experiment_cards.json
+    result_to_claim_matrix.json
+    understanding_review.md
     paper_analysis.md
     figures_index.md
     slide_outline.md
     visual_storyboard.md
     slide_specs.json
     source_map.md
+    language_check_report.md
   final_presentation_generated.html
   final_presentation.html
   final_presentation_generated.pptx
@@ -122,6 +133,47 @@ paper_ppt_project/
 ## Workflow
 
 Read `references/academic_presentation_agent.md` and `references/presentation_design_philosophy.md` when the user asks for an optimized, iterative, professor-reviewed, or high-quality deck.
+
+### 0. One-command Academic Presentation Agent
+
+For normal use, prefer the one-command agent entry instead of manually assembling the pipeline:
+
+```powershell
+python scripts/generate_academic_presentation.py `
+  --pdf path\to\paper.pdf `
+  --project paper_ppt_project `
+  --lang zh `
+  --rounds 3 `
+  --target-score 9
+```
+
+Language is explicit:
+
+- `--lang zh`: visible PPT/HTML content is Chinese. Keep paper title, method names, acronyms, and technical terms when useful; move long English source excerpts into notes/source artifacts.
+- `--lang en`: visible PPT/HTML content is English. Do not leak Chinese template text into slides.
+
+Every run writes `language_check_report.md`. Treat `WARN` as a revision task before sharing the deck.
+
+This command performs:
+
+```text
+PDF
+-> Research Understanding Engine
+-> research_understanding.json / motivation_chain.json / method_model.json
+-> evidence / figures index
+-> storyboard.json
+-> visual_plan.json
+-> deck_model.json
+-> slide_specs.json
+-> Slide Architect
+-> HTML + editable PPTX
+-> layout / figure / PPTX validators
+-> language_check_report.md
+-> Professor Review
+-> improvement_history.md
+```
+
+Use the manual steps below only when the one-command run needs human correction, such as re-cropping a difficult figure or rewriting a slide-specific visual plan.
 
 If the user provides a beautiful reference PPT, do not copy its colors or fonts. Learn only its design philosophy:
 
@@ -141,7 +193,37 @@ Use the resulting JSON as a planning constraint, not a visual theme. The bundled
 
 ### 1. Paper Understanding
 
-Read the paper before designing slides. Produce `intermediate/paper_analysis.md` with:
+Read the paper before designing slides. Prefer the deterministic Research Understanding Engine first:
+
+```powershell
+python scripts/build_research_understanding.py --pdf paper_ppt_project/source/paper.pdf --project paper_ppt_project --lang zh
+```
+
+It produces source-grounded understanding artifacts:
+
+```text
+intermediate/research_understanding.json
+intermediate/domain_primer.md
+intermediate/motivation_chain.json
+intermediate/related_work_matrix.json
+intermediate/gap_analysis.json
+intermediate/contribution_cards.json
+intermediate/method_model.json
+intermediate/why_effective.md
+intermediate/experiment_cards.json
+intermediate/result_to_claim_matrix.json
+intermediate/limitation_risks.json
+intermediate/research_story_brief.md
+intermediate/understanding_review.md
+```
+
+The engine must answer:
+
+```text
+Why -> What -> How -> Why Effective -> How Verified
+```
+
+Only then produce `intermediate/paper_analysis.md` and slide specs with:
 
 - title, authors, year, venue if available;
 - research background and problem;
@@ -154,6 +236,14 @@ Read the paper before designing slides. Produce `intermediate/paper_analysis.md`
 - limitations and discussion questions.
 
 Do not invent results. Mark uncertain items as `needs verification`.
+
+For every important slide claim, bind the claim to one of:
+
+- a source sentence or section;
+- a paper figure/table/algorithm;
+- an experiment card;
+- a result-to-claim matrix row;
+- a reviewer caveat.
 
 ### 2. Evidence Extraction
 

@@ -83,8 +83,19 @@ def find_caption_line(page: PageText, label: str) -> Line:
         ]
     if not candidates:
         raise ValueError(f"Cannot locate caption label {label!r}")
-    # Caption lines are usually smaller text; choose the shortest matching line to avoid body references like "Fig. 2(a)".
-    return min(candidates, key=lambda line: (line.y1, len(line.text)))
+
+    number = re.sub(r"[^0-9A-Za-z.]", "", normalized.split()[-1]).rstrip(".")
+    caption_start = re.compile(rf"^\s*(Fig\.?|Figure)\s*{re.escape(number)}\.?\b", re.IGNORECASE)
+
+    def score(line: Line) -> tuple[int, int, float, int]:
+        text = line.text.strip()
+        starts_like_caption = 0 if caption_start.search(text) else 1
+        inline_reference = 1 if re.search(r"\b(see|in|from|as shown|cf\.)\b", text, re.IGNORECASE) else 0
+        # Real captions are usually short lines beginning with the label. Body
+        # references often contain the same label in the middle of a paragraph.
+        return (starts_like_caption, inline_reference, line.y1, len(text))
+
+    return min(candidates, key=score)
 
 
 def infer_column(page: PageText, caption: Line, mode: str) -> tuple[float, float]:
@@ -149,11 +160,15 @@ def find_visual_band(gray: Image.Image, x1: int, y1: int, x2: int, y2: int, focu
             rows.append(y)
     if not rows:
         return x1, y1, x2, y2
-    groups = [(g1, g2 - 1) for g1, g2 in split_groups(rows, 42)]
-    # Pick the content band closest to the caption and merge nearby subfigure bands.
-    sel_start, sel_end = groups[-1]
-    for g_start, g_end in reversed(groups[:-1]):
-        if sel_start - g_end <= 70:
+    groups = [(g1, g2 - 1) for g1, g2 in split_groups(rows, max(14, int(h * 0.012)))]
+    # Pick the visually substantial content band closest to the caption. This
+    # avoids selecting a nearby body-text paragraph when a PDF uses two columns.
+    min_h = max(28, int(h * 0.035))
+    substantial = [g for g in groups if g[1] - g[0] >= min_h]
+    base_groups = substantial or groups
+    sel_start, sel_end = base_groups[-1]
+    for g_start, g_end in reversed(groups[: groups.index((sel_start, sel_end))] if (sel_start, sel_end) in groups else groups[:-1]):
+        if sel_start - g_end <= max(24, int(h * 0.016)):
             sel_start = g_start
         else:
             break
@@ -169,7 +184,7 @@ def find_visual_band(gray: Image.Image, x1: int, y1: int, x2: int, y2: int, focu
         if dark > max(2, int(bh * 0.006)):
             cols.append(x)
     if cols:
-        col_groups = split_groups(cols, max(22, int(w * 0.035)))
+        col_groups = split_groups(cols, max(16, int(w * 0.018)))
         local_focus = None if focus_x is None else focus_x - x1
         chosen = choose_column_group(col_groups, local_focus, w)
         if chosen:

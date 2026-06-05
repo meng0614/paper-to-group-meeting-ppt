@@ -7,7 +7,7 @@ This skill is a general Academic Presentation Agent. It is not tied to any speci
 The workflow:
 
 ```text
-paper understanding -> visual storyboard -> section architect -> visualizer -> HTML report + editable PPTX -> layout/figure validators -> professor review -> refined outputs
+research understanding engine -> visual storyboard -> section architect -> visualizer -> HTML report + editable PPTX -> layout/figure validators -> professor review -> refined outputs
 ```
 
 It does not only summarize a paper. The default strategy is **Presentation-first / Visual-first**: every section starts with Story Phase, One Message, 5-second takeaway, Visual, and Content. The report should help someone who has not read the paper understand the motivation, problem, core idea, why it works, and whether experiments support it in 10-15 minutes.
@@ -57,12 +57,26 @@ paper_ppt_project/
     alg_01_main.png
     table_01_setup.png
   intermediate/
+    research_understanding.json
+    domain_primer.md
+    motivation_chain.json
+    related_work_matrix.json
+    gap_analysis.json
+    contribution_cards.json
+    method_model.json
+    why_effective.md
+    experiment_cards.json
+    result_to_claim_matrix.json
+    limitation_risks.json
+    research_story_brief.md
+    understanding_review.md
     paper_analysis.md
     figures_index.md
     slide_outline.md
     visual_storyboard.md
     slide_specs.json
     source_map.md
+    language_check_report.md
   final_presentation_generated.html
   final_presentation.html
   final_presentation_generated.pptx
@@ -78,7 +92,9 @@ paper_ppt_project/
 
 ## Skill Capabilities
 
+- Build a Research Understanding Engine output before slide design: Why / What / How / Why Effective / How Verified.
 - Understand the paper structure: problem, motivation, method, experiments, results, limitations.
+- Extract a motivation chain, related-work gap, contribution cards, method model, result-to-claim matrix, and reviewer caveats.
 - Create a visual storyboard with Story Phase / One Message / 5-second takeaway / Visual / Content for every slide.
 - Plan slide count and page capacity with a Slide Architect before rendering.
 - Extract and crop useful visual evidence from PDFs.
@@ -99,6 +115,7 @@ paper_ppt_project/
 
 ```text
 scripts/render_pdf_pages.py       Render PDF pages to PNG with pdftoppm at PPT-readable DPI.
+scripts/build_research_understanding.py Build source-grounded research-understanding artifacts.
 scripts/extract_reference_design_philosophy.py Learn reference PPT layout philosophy without copying colors/fonts.
 scripts/crop_pdf_figures_by_caption.py Caption-aware figure cropper using pdftotext bbox coordinates.
 scripts/crop_pdf_regions.py       Manual clean-box cropper with padding, trimming, and upscaling.
@@ -137,6 +154,60 @@ Include paper understanding, visual sections, figures/tables/algorithms, HTML re
 The skill instructions in `SKILL.md` define the complete workflow.
 
 ## Manual Script Usage
+
+One-command Academic Presentation Agent:
+
+```bash
+python scripts/generate_academic_presentation.py \
+  --pdf paper.pdf \
+  --project output/paper_ppt_project \
+  --lang zh \
+  --rounds 3 \
+  --target-score 9
+```
+
+This creates the complete planning and rendering chain:
+
+```text
+intermediate/research_understanding.json
+intermediate/motivation_chain.json
+intermediate/gap_analysis.json
+intermediate/contribution_cards.json
+intermediate/method_model.json
+intermediate/why_effective.md
+intermediate/experiment_cards.json
+intermediate/result_to_claim_matrix.json
+intermediate/understanding_review.md
+intermediate/paper_model.json
+intermediate/storyboard.json
+intermediate/visual_plan.json
+intermediate/deck_model.json
+intermediate/slide_specs.json
+language_check_report.md
+final/final_presentation_generated.html
+final/final_presentation_generated.pptx
+layout_check_report.md
+pptx_layout_check_report.md
+figure_quality_report.md
+review_report.md
+improvement_history.md
+```
+
+Language selection:
+
+- `--lang zh`: generate Chinese visible slide/report content, while preserving paper titles, acronyms, and necessary technical terms. Long English source excerpts stay in notes and source artifacts.
+- `--lang en`: generate English visible slide/report content and suppress Chinese template leakage.
+
+Each run writes `language_check_report.md`; `PASS` means no long source-language prose is visible in the wrong language mode.
+
+Run only the understanding layer:
+
+```bash
+python scripts/build_research_understanding.py \
+  --pdf paper.pdf \
+  --project output/paper_ppt_project \
+  --lang zh
+```
 
 Render pages:
 
