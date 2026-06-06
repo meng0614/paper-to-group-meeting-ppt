@@ -10,7 +10,7 @@ Create a general Academic Presentation Agent for arbitrary research papers. Do n
 The skill's core promise is:
 
 ```text
-research understanding engine -> visual storyboard -> section architect -> visualizer -> HTML report + editable PPTX -> layout/figure validators -> professor review -> refined outputs
+Research Understanding Engine v2 -> Nature-style research story model -> enhanced caption-aware figure extraction -> visual storyboard / style preset -> HTML report + editable PPTX -> layout / figure validators -> professor review artifacts
 ```
 
 The output should be a usable HTML report for a human presenter, not merely a paper summary.
@@ -35,6 +35,8 @@ What minimal text is needed to support that visual?
 ```
 
 Only after these three fields are clear should the section be rendered.
+
+The current default generator is v2. It learns from Nature-style paper presentation skills: understand the paper first, then design the talk. It must explicitly answer Why, What, How, Why Effective, and How Verified before rendering slides. It should also outperform generic paper-to-PPT tools on figure handling by using caption-linked high-DPI crops, trimming, padding, upscaling, a contact sheet, and `figure_quality_report.md`.
 
 Hard design principles:
 
@@ -143,6 +145,7 @@ python scripts/generate_academic_presentation.py `
   --pdf path\to\paper.pdf `
   --project paper_ppt_project `
   --lang zh `
+  --style nature-clean `
   --rounds 3 `
   --target-score 9
 ```
@@ -151,6 +154,13 @@ Language is explicit:
 
 - `--lang zh`: visible PPT/HTML content is Chinese. Keep paper title, method names, acronyms, and technical terms when useful; move long English source excerpts into notes/source artifacts.
 - `--lang en`: visible PPT/HTML content is English. Do not leak Chinese template text into slides.
+
+Style is explicit:
+
+- `--style nature-clean`: clean white academic talk, strong hierarchy.
+- `--style conference-blue`: modern blue conference deck.
+- `--style minimal-dark`: dark seminar/talk style.
+- `--style warm-paper`: warmer editorial academic style.
 
 Every run writes `language_check_report.md`. Treat `WARN` as a revision task before sharing the deck.
 

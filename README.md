@@ -4,13 +4,15 @@ Generate a high-quality academic group-meeting HTML report and editable PowerPoi
 
 This skill is a general Academic Presentation Agent. It is not tied to any specific discipline. It can be used for systems, networking, AI, medicine, biology, social science, and other academic papers.
 
-The workflow:
+The default v2 workflow:
 
 ```text
-research understanding engine -> visual storyboard -> section architect -> visualizer -> HTML report + editable PPTX -> layout/figure validators -> professor review -> refined outputs
+Research Understanding Engine v2 -> Nature-style research story model -> enhanced caption-aware figure extraction -> visual storyboard / style preset -> HTML report + editable PPTX -> layout / figure validators -> professor review artifacts
 ```
 
 It does not only summarize a paper. The default strategy is **Presentation-first / Visual-first**: every section starts with Story Phase, One Message, 5-second takeaway, Visual, and Content. The report should help someone who has not read the paper understand the motivation, problem, core idea, why it works, and whether experiments support it in 10-15 minutes.
+
+The v2 generator borrows the strongest ideas from Nature-style paper presentation skills: build the research story before slides, explain Why / What / How / Why Effective / How Verified, bind results to claims, and close with contribution, mechanism, and boundary. It also tries to improve figure handling: figures are rendered at high DPI, located from caption bounding boxes, trimmed to the visual content, padded, upscaled when needed, and checked with a figure-quality report.
 
 The design philosophy is:
 
@@ -108,6 +110,8 @@ paper_ppt_project/
 - Rotate among figure-first, left-right, top-visual, flow, comparison, and result-focus layouts to avoid repetitive pages.
 - Choose layouts by story phase: Problem/Challenge -> comparison or bottleneck; Idea/Method -> framework or pipeline; Result -> enlarged chart plus So What; Takeaway -> contribution/novelty/limitation.
 - Check cropped figures for low resolution, likely incomplete crops, excessive whitespace, blur, and low contrast.
+- Support multiple style presets: `nature-clean`, `conference-blue`, `minimal-dark`, and `warm-paper`.
+- Prefer `pptxgenjs` when available for polished editable PPTX with speaker notes; fall back to the Python OOXML renderer when Node/pptxgenjs is unavailable.
 - Coordinate with existing paper-reading and slide-design skills when available.
 - Optionally use external figure extraction backends such as PDFFigures2, GROBID, PyMuPDF, or LayoutParser when installed. See `references/figure_extraction_backends.md`.
 
@@ -115,7 +119,7 @@ paper_ppt_project/
 
 ```text
 scripts/render_pdf_pages.py       Render PDF pages to PNG with pdftoppm at PPT-readable DPI.
-scripts/build_research_understanding.py Build source-grounded research-understanding artifacts.
+scripts/build_research_understanding.py Build source-grounded Research Understanding Engine v2 artifacts.
 scripts/extract_reference_design_philosophy.py Learn reference PPT layout philosophy without copying colors/fonts.
 scripts/crop_pdf_figures_by_caption.py Caption-aware figure cropper using pdftotext bbox coordinates.
 scripts/crop_pdf_regions.py       Manual clean-box cropper with padding, trimming, and upscaling.
@@ -124,11 +128,14 @@ scripts/create_10_slide_spec_template.py Create a standard 10-slide group-meetin
 scripts/create_visual_first_spec_template.py Create a visual-first Page Goal/Visual/Content spec.
 scripts/slide_architect.py       Split overloaded content before rendering.
 scripts/build_html_report_from_spec.py Build final HTML report and speaker notes.
+scripts/build_pptxgenjs_from_spec.js Build polished editable PPTX with style presets and speaker notes when pptxgenjs is available.
 scripts/build_editable_pptx_from_spec.py Build editable PPTX from the same section spec.
 scripts/html_layout_validator.py Validate HTML sections and generate layout_check_report.md.
 scripts/build_pptx_from_spec.py   Optional compatibility PPTX renderer.
 scripts/layout_validator.py       Optional PPTX-style layout validator.
 scripts/refine_presentation_loop.py Run generator-reviewer-reviser refinement rounds.
+scripts/generate_academic_presentation_legacy.py Legacy pre-v2 generator preserved for rollback/comparison.
+scripts/build_research_understanding_legacy.py Legacy pre-v2 understanding engine preserved for rollback/comparison.
 ```
 
 ## Dependencies
@@ -162,6 +169,7 @@ python scripts/generate_academic_presentation.py \
   --pdf paper.pdf \
   --project output/paper_ppt_project \
   --lang zh \
+  --style nature-clean \
   --rounds 3 \
   --target-score 9
 ```
@@ -170,24 +178,12 @@ This creates the complete planning and rendering chain:
 
 ```text
 intermediate/research_understanding.json
-intermediate/motivation_chain.json
-intermediate/gap_analysis.json
-intermediate/contribution_cards.json
-intermediate/method_model.json
-intermediate/why_effective.md
-intermediate/experiment_cards.json
-intermediate/result_to_claim_matrix.json
-intermediate/understanding_review.md
-intermediate/paper_model.json
-intermediate/storyboard.json
-intermediate/visual_plan.json
-intermediate/deck_model.json
 intermediate/slide_specs.json
-language_check_report.md
-final/final_presentation_generated.html
-final/final_presentation_generated.pptx
+intermediate/research_story_brief.md
+intermediate/paper_analysis.md
+final_presentation_generated.html
+final_presentation_generated.pptx
 layout_check_report.md
-pptx_layout_check_report.md
 figure_quality_report.md
 review_report.md
 improvement_history.md
@@ -197,6 +193,13 @@ Language selection:
 
 - `--lang zh`: generate Chinese visible slide/report content, while preserving paper titles, acronyms, and necessary technical terms. Long English source excerpts stay in notes and source artifacts.
 - `--lang en`: generate English visible slide/report content and suppress Chinese template leakage.
+
+Style selection:
+
+- `--style nature-clean`: clean white academic talk, strong hierarchy.
+- `--style conference-blue`: modern blue conference deck.
+- `--style minimal-dark`: dark seminar/talk style.
+- `--style warm-paper`: warmer editorial academic style.
 
 Each run writes `language_check_report.md`; `PASS` means no long source-language prose is visible in the wrong language mode.
 
