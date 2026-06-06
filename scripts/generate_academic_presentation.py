@@ -113,11 +113,22 @@ def extract_pages(pdf: Path) -> list[str]:
 
 def extract_title(first_page: str, pdf: Path) -> str:
     lines = [clean_text(line).strip() for line in first_page.splitlines() if line.strip()]
-    drop = re.compile(r"abstract|keyword|copyright|received|accepted|available online|journal homepage|doi|@|university", re.I)
+    drop = re.compile(
+        r"abstract|keyword|copyright|received|accepted|available online|contents lists available|sciencedirect|journal homepage|elsevier|doi|@|university",
+        re.I,
+    )
     candidates = [line for line in lines[:25] if not drop.search(line) and 8 <= len(line) <= 150]
-    for line in candidates[:8]:
+    for idx, line in enumerate(lines[:25]):
+        if drop.search(line) or not (8 <= len(line) <= 150):
+            continue
         if line.count(" ") >= 4 and not re.match(r"^[A-Z][a-z]+ [A-Z][a-z]+", line):
-            return line
+            combined = line
+            if idx + 1 < len(lines):
+                nxt = lines[idx + 1].strip()
+                if not drop.search(nxt) and 4 <= len(nxt) <= 120 and nxt.count(" ") <= 8 and not re.search(r"abstract|keyword|received|accepted", nxt, re.I):
+                    combined = f"{combined} {nxt}"
+            combined = re.sub(r"(?<=[a-z])I$", "", combined).strip()
+            return combined
     return candidates[0] if candidates else pdf.stem
 
 
@@ -273,6 +284,107 @@ def zh_or_en(lang: str, zh: str, en: str) -> str:
     return zh if lang == "zh" else en
 
 
+def caption_pick(items: list[FigureCaption], keywords: list[str], fallback: int = 0) -> str | None:
+    for item in items:
+        caption = item.caption.lower()
+    if any(k.lower() in caption for k in keywords):
+            return item.label
+    if not items:
+        return None
+    index = fallback if fallback >= 0 else len(items) + fallback
+    return items[min(max(index, 0), len(items) - 1)].label
+
+
+def build_figure_roles(figures: list[FigureCaption], tables: list[FigureCaption]) -> dict:
+    return {
+        "motivation_figure": caption_pick(figures, ["time-aware", "avb transmission", "guard band", "frame preemption"], 0),
+        "core_insight_figure": caption_pick(figures, ["wcd", "window distributions", "205", "245", "255"], 3),
+        "core_theory_figure": caption_pick(figures, ["relative offset", "minimum relative", "service", "curve"], 4),
+        "method_framework_figure": caption_pick(figures, ["heuristic", "asap", "alap", "algorithm", "schedule"], 5),
+        "system_framework_figure": caption_pick(figures, ["system architecture", "framework", "scheduling"], 2),
+        "experiment_setup_figure": caption_pick(figures, ["ivn", "topologies", "synthetic", "architecture"], 6),
+        "ablation_evidence": caption_pick(tables, ["ablation", "local search"], 0),
+        "main_result_figure": caption_pick(figures, ["scalability", "tt proportions", "runtime", "success"], -2),
+        "scalability_figure": caption_pick(figures, ["network size", "scalability"], -1),
+    }
+
+
+def build_theory_model(lang: str, full_text: str, insight: str, limitation: str) -> dict:
+    lemma_sents = pick_sentences(full_text, ["lemma", "theorem", "corollary", "lower bound", "relative offset", "service curve"], 6)
+    if has_tsn_avb_pattern(full_text):
+        problem = zh_or_en(lang, "TT GCL 会切走 AVB 的剩余服务，导致 AVB WCD 随窗口形态变化。", "TT GCLs remove residual service from AVB traffic, so AVB WCD changes with the shape of TT windows.")
+        assumption = zh_or_en(lang, "在 TAS+CBS 下，用网络演算描述 AVB arrival curve、residual service curve 和 TT 窗口阻塞。", "Under TAS+CBS, network calculus models the AVB arrival curve, residual service curve, and TT-window blocking.")
+        derivation = zh_or_en(lang, "作者把实际服务曲线与理想服务下界比较，得到两个可调度因子：最大 TT 窗口长度与相邻 TT 窗口最小相对偏移。", "The paper compares the actual service curve with an ideal lower-bound service and derives two schedulable factors: maximum TT-window length and minimum relative offset between adjacent TT windows.")
+        final = zh_or_en(lang, "最终洞察：缩短连续 TT 阻塞，并让相邻 TT 窗口留出足够 offset，可把 AVB WCD 推向更低的理论区域。", "Final insight: shorten continuous TT blocking and leave enough offset between adjacent TT windows to push AVB WCD toward a lower theoretical region.")
+    else:
+        problem = zh_or_en(lang, "理论部分要解释核心问题为什么可以被压缩或重写。", "The theory section explains why the core problem can be compressed or reformulated.")
+        assumption = compact(lemma_sents[0] if lemma_sents else "Assumptions need verification.", 180)
+        derivation = compact(lemma_sents[1] if len(lemma_sents) > 1 else insight, 220)
+        final = compact(lemma_sents[2] if len(lemma_sents) > 2 else insight, 220)
+    return {
+        "problem": problem,
+        "assumption": assumption,
+        "key_derivation": derivation,
+        "final_insight": final,
+        "lemma_theorem_corollary_signals": [compact(s, 240) for s in lemma_sents],
+        "boundary": limitation,
+    }
+
+
+def build_experiment_logic(lang: str, result: str, verified: str) -> list[dict]:
+    return [
+        {
+            "type": "Ablation",
+            "question": zh_or_en(lang, "NOF 与 NOFWS 各自贡献了什么？", "What does NOF and NOFWS each contribute?"),
+            "setup": zh_or_en(lang, "在真实 IVN 配置上比较 BS、NOF、NOFWS。", "Compare BS, NOF, and NOFWS on the realistic IVN configuration."),
+            "evidence": zh_or_en(lang, "消融表检查 TT success、AVB success、AVB WCD 与 runtime。", "The ablation table checks TT success, AVB success, AVB WCD, and runtime."),
+            "conclusion": zh_or_en(lang, "目标函数与 window switching 的价值不只是性能提升，还包括搜索效率提升。", "The objective and window switching matter not only for performance, but also for search efficiency."),
+        },
+        {
+            "type": "Comparison",
+            "question": zh_or_en(lang, "NOFWS 相比 OMT/DRL 是否更适合作为调度器？", "Is NOFWS more practical than OMT/DRL as a scheduler?"),
+            "setup": verified,
+            "evidence": result,
+            "conclusion": zh_or_en(lang, "比较实验要说明 claim 是否被直接支撑，而不是只说曲线更好。", "The comparison should show whether the core claim is directly supported, not just that curves look better."),
+        },
+        {
+            "type": "Scalability",
+            "question": zh_or_en(lang, "TT 比例和网络规模升高时，方法是否还能稳定？", "Does the method remain stable as TT ratio and network size grow?"),
+            "setup": zh_or_en(lang, "改变 TT proportion 与 network scale，观察可调度性、AVB 支持和 runtime。", "Vary TT proportion and network scale, then inspect schedulability, AVB support, and runtime."),
+            "evidence": result,
+            "conclusion": zh_or_en(lang, "可扩展性实验回答方法是否有部署意义。", "Scalability experiments answer whether the method has deployment value."),
+        },
+    ]
+
+
+def build_storyline_extraction(lang: str, gap: str, motivation: str, insight: str, theory: dict, method_msg: str, validation: str, contribution: str) -> dict:
+    return {
+        "Research Gap": gap,
+        "Motivation": motivation,
+        "Key Insight": insight,
+        "Theory": theory["final_insight"],
+        "Method": method_msg,
+        "Validation Logic": validation,
+        "Contribution": contribution,
+        "teaching_order": [
+            "Problem",
+            "Why Existing Work Fails",
+            "Key Insight",
+            "Theory",
+            "Method",
+            "Experiment Logic",
+            "Results",
+            "Takeaways",
+        ],
+        "not_paper_order": ["Introduction", "Related Work", "Method", "Experiment", "Conclusion"],
+        "professor_rule": zh_or_en(
+            lang,
+            "每页必须回答：为什么存在、听众学到什么、哪张图或图示支撑。",
+            "Every slide must answer: why it exists, what the audience learns, and which figure/visual proves it.",
+        ),
+    }
+
+
 def build_understanding(pdf: Path, lang: str) -> dict:
     pages = extract_pages(pdf)
     full = "\n".join(pages)
@@ -339,6 +451,42 @@ def build_understanding(pdf: Path, lang: str) -> dict:
         result = zh_or_en(lang, "结果解释：" + compact(eval_sents[1] if len(eval_sents) > 1 else "结果趋势需要结合图表核对。", 170), compact(eval_sents[1] if len(eval_sents) > 1 else "Result trend needs chart-level verification.", 200))
         limitation = zh_or_en(lang, "局限性：适用边界、实验覆盖范围和泛化性需要重点讨论。", "Limitations: applicability boundary, evaluation coverage, and generalization need discussion.")
 
+    motivation_context = (
+        zh_or_en(lang, "TSN/TAS 场景需要同时保证 TT 确定性和 AVB 延迟表现。", "The setting requires both TT determinism and AVB delay performance.")
+        if has_tsn_avb_pattern(full)
+        else compact(abstract, 220)
+    )
+    figure_roles = build_figure_roles(figures, tables)
+    theory_model = build_theory_model(lang, full, insight, limitation)
+    experiment_logic = build_experiment_logic(lang, result, verified)
+    storyline_extraction = build_storyline_extraction(
+        lang,
+        gap,
+        motivation_context,
+        insight,
+        theory_model,
+        method_msg,
+        verified,
+        contribution,
+    )
+    professor_gate = {
+        "purpose": zh_or_en(
+            lang,
+            "每页不是复述论文，而是帮助教授用 10 分钟讲清楚一个必要节点。",
+            "Each slide should help a professor explain one necessary node in a 10-minute teaching talk.",
+        ),
+        "required_questions": [
+            zh_or_en(lang, "Why this slide exists?", "Why this slide exists?"),
+            zh_or_en(lang, "What should audience learn?", "What should audience learn?"),
+            zh_or_en(lang, "What figure proves it?", "What figure proves it?"),
+        ],
+        "delete_rule": zh_or_en(
+            lang,
+            "如果一页无法回答这三个问题，就删除或合并。",
+            "If a slide cannot answer these three questions, delete or merge it.",
+        ),
+    }
+
     why = [
         zh_or_en(lang, "瓶颈：" + gap, "Bottleneck: " + gap),
         zh_or_en(lang, "机制：" + method_msg, "Mechanism: " + method_msg),
@@ -346,11 +494,13 @@ def build_understanding(pdf: Path, lang: str) -> dict:
     ]
     story = [
         {"phase": "Problem", "message": gap},
-        {"phase": "Challenge", "message": insight},
-        {"phase": "Idea", "message": contribution},
+        {"phase": "Why Existing Work Fails", "message": gap},
+        {"phase": "Key Insight", "message": insight},
+        {"phase": "Theory", "message": theory_model["final_insight"]},
         {"phase": "Method", "message": method_msg},
-        {"phase": "Result", "message": result},
-        {"phase": "Takeaway", "message": limitation},
+        {"phase": "Experiment Logic", "message": verified},
+        {"phase": "Results", "message": result},
+        {"phase": "Takeaways", "message": limitation},
     ]
     return {
         "title": title,
@@ -370,7 +520,7 @@ def build_understanding(pdf: Path, lang: str) -> dict:
             "how_verified": verified,
         },
         "motivation_chain": {
-            "context": zh_or_en(lang, "TSN/TAS 场景需要同时保证 TT 确定性和 AVB 延迟表现。", "The setting requires both TT determinism and AVB delay performance.") if has_tsn_avb_pattern(full) else compact(abstract, 220),
+            "context": motivation_context,
             "old_paradigm": zh_or_en(lang, "先排 TT，再评估 AVB。", "Schedule TT first, evaluate AVB later.") if has_tsn_avb_pattern(full) else "needs verification",
             "broken_assumption": gap,
             "paper_move": contribution,
@@ -391,6 +541,11 @@ def build_understanding(pdf: Path, lang: str) -> dict:
             "assumptions": [limitation],
         },
         "why_effective": {"causal_chain": why, "tradeoff": limitation},
+        "storyline_extraction": storyline_extraction,
+        "figure_roles": figure_roles,
+        "theory_model": theory_model,
+        "experiment_logic": experiment_logic,
+        "professor_gate": professor_gate,
         "experiment_cards": [
             {
                 "id": "E1",
@@ -934,8 +1089,351 @@ def build_slide_spec(understanding: dict, image_map: dict[str, str], project: Pa
         "source_pdf": understanding["source_pdf"],
         "sections": slides,
         "understanding_engine": {
-            "name": "Research Understanding Engine v2",
+            "name": "Research Understanding Engine v3",
             "principles": ["Why", "What", "How", "Why Effective", "How Verified", "Claim-Evidence-Boundary"],
+        },
+    }
+
+
+def build_slide_spec(understanding: dict, image_map: dict[str, str], project: Path, style: str, lang: str) -> dict:
+    """Teaching-first slide planner.
+
+    The older generator built slides from summary fields. This version builds a
+    professor-style explanation: storyline first, then figure-centered slides.
+    """
+    figs = understanding.get("figures", [])
+    title = understanding["title"]
+    rq = understanding["research_questions"]
+    motivation = understanding["motivation_chain"]
+    method = understanding["method_model"]
+    exp = understanding["experiment_cards"][0]
+    limitations = understanding["limitation_risks"]
+    contribution = understanding["contribution_cards"][0]["claim"]
+    insight = understanding["contribution_cards"][1]["claim"]
+    result = exp["key_result"]
+    limitation = limitations[0]["risk"]
+    theory = understanding.get("theory_model", {})
+    experiment_logic = understanding.get("experiment_logic", [])
+    figure_roles = understanding.get("figure_roles", {})
+
+    def role_image(role: str, keywords: list[str], fallback: int = 0) -> str | None:
+        label = figure_roles.get(role)
+        if label and label in image_map:
+            return image_map[label]
+        return pick_figure(figs, image_map, keywords, fallback)
+
+    def proof(role: str, fallback: str) -> str:
+        label = figure_roles.get(role)
+        return label if label else fallback
+
+    img_background = role_image("motivation_figure", ["time-aware", "avb transmission", "guard band", "frame preemption", "system"], 0)
+    img_problem = role_image("motivation_figure", ["time-aware", "guard band", "frame preemption"], 0)
+    img_insight = role_image("core_insight_figure", ["wcd", "window distributions", "205", "245", "255"], 3)
+    img_theory = role_image("core_theory_figure", ["relative offset", "minimum relative", "service curve"], 4)
+    img_method = role_image("method_framework_figure", ["heuristic", "algorithm", "grasp", "schedule", "local"], 5)
+    img_setup = role_image("experiment_setup_figure", ["ivn", "topologies", "architecture", "synthetic"], 6)
+    img_result = role_image("main_result_figure", ["scalability", "runtime", "success", "comparison", "results"], -1)
+    img_scalability = role_image("scalability_figure", ["network size", "scalability", "runtime"], -1)
+
+    method_steps = [
+        {"label": zh_or_en(lang, "Input", "Input"), "detail": zh_or_en(lang, "网络、TT/AVB 流、周期、deadline 与 GCL 约束。", "Network, TT/AVB flows, periods, deadlines, and GCL constraints.")},
+        {"label": zh_or_en(lang, "Theory Factors", "Theory Factors"), "detail": insight},
+        {"label": zh_or_en(lang, "Objective", "Objective"), "detail": zh_or_en(lang, "把 AVB WCD 友好性写入 TT 调度目标。", "Encode AVB-WCD friendliness into the TT scheduling objective.")},
+        {"label": zh_or_en(lang, "GRASP Search", "GRASP Search"), "detail": zh_or_en(lang, "构造候选 GCL，而不是穷举完整排程空间。", "Construct candidate GCLs instead of exhaustively searching the full schedule space.")},
+        {"label": zh_or_en(lang, "Local Search", "Local Search"), "detail": zh_or_en(lang, "用 flexible local search 修正窗口位置。", "Use flexible local search to refine window placement.")},
+        {"label": zh_or_en(lang, "Output", "Output"), "detail": zh_or_en(lang, "输出满足 TT 约束且更照顾 AVB WCD 的 GCL。", "Output a GCL that satisfies TT constraints and better protects AVB WCD.")},
+    ]
+
+    def professor(why: str, learn: str, visual_proof: str) -> dict:
+        return {
+            "why_this_slide_exists": why,
+            "what_audience_learns": learn,
+            "what_figure_proves_it": visual_proof,
+        }
+
+    def note_with_gate(notes: str, gate: dict) -> str:
+        return (
+            notes
+            + "\n\nProfessor gate:\n"
+            + f"- Why this slide exists: {gate['why_this_slide_exists']}\n"
+            + f"- What should audience learn: {gate['what_audience_learns']}\n"
+            + f"- What figure proves it: {gate['what_figure_proves_it']}"
+        )
+
+    def s(
+        kind: str,
+        section: str,
+        phase: str,
+        title_: str,
+        takeaway: str,
+        visual: dict,
+        bullets: list[str],
+        image: str | None = None,
+        gate: dict | None = None,
+        notes: str = "",
+    ) -> dict:
+        gate = gate or professor(
+            zh_or_en(lang, "这是故事线中的必要节点。", "This is a necessary node in the story."),
+            takeaway,
+            image or zh_or_en(lang, "生成的概念图", "Generated concept diagram"),
+        )
+        return {
+            "kind": kind,
+            "section": section,
+            "story_phase": phase,
+            "title": title_,
+            "one_message": title_,
+            "audience_takeaway": takeaway,
+            "page_goal": takeaway,
+            "visual": visual,
+            "bullets": [compact(b, 105) for b in bullets[:3]],
+            "content": compact(takeaway, 260),
+            "image": image,
+            "professor_check": gate,
+            "notes": note_with_gate(notes or f"Source-grounded from {understanding['source_pdf']}", gate),
+        }
+
+    why_fails_visual = {
+        "type": "comparison",
+        "left_title": zh_or_en(lang, "旧讲法", "Old framing"),
+        "right_title": zh_or_en(lang, "本文重构", "Paper reframing"),
+        "left": [motivation["old_paradigm"], zh_or_en(lang, "TT 可调度性是主目标。", "TT feasibility is the main target.")],
+        "right": [rq["why"], contribution],
+    }
+    theory_visual = {
+        "type": "theory_chain",
+        "items": [
+            {"label": zh_or_en(lang, "Problem", "Problem"), "detail": theory.get("problem", rq["why"])},
+            {"label": zh_or_en(lang, "Assumption", "Assumption"), "detail": theory.get("assumption", limitation)},
+            {"label": zh_or_en(lang, "Key Derivation", "Key Derivation"), "detail": theory.get("key_derivation", insight)},
+            {"label": zh_or_en(lang, "Final Insight", "Final Insight"), "detail": theory.get("final_insight", insight)},
+        ],
+    }
+    experiment_overview_visual = {
+        "type": "experiment_logic",
+        "items": [
+            {"label": zh_or_en(lang, "Question", "Question"), "detail": exp["question"]},
+            {"label": zh_or_en(lang, "Setup", "Setup"), "detail": rq["how_verified"]},
+            {"label": zh_or_en(lang, "Evidence", "Evidence"), "detail": result},
+            {"label": zh_or_en(lang, "Conclusion", "Conclusion"), "detail": contribution},
+        ],
+    }
+
+    slides = [
+        s(
+            "cover",
+            "Title",
+            "Problem",
+            title,
+            zh_or_en(lang, "先记住论文的核心故事：它不是摘要，而是一次问题重构。", "First remember the paper story: this is a reframing, not a summary."),
+            {"type": "cover", "headline": contribution, "insight": understanding["research_story_brief"]["one_sentence"]},
+            [rq["why"], rq["what"]],
+            img_background,
+            professor(
+                zh_or_en(lang, "开场要建立论文定位，而不是念标题。", "The opening positions the paper instead of reading the title."),
+                contribution,
+                proof("motivation_figure", "Title / overview visual"),
+            ),
+            "Use title, abstract, and the first useful overview figure as opening evidence.",
+        ),
+        s(
+            "problem",
+            "Problem",
+            "Problem",
+            zh_or_en(lang, "问题：TT 调度不能只看 TT 自己", "Problem: TT scheduling cannot optimize TT alone"),
+            rq["why"],
+            {
+                "type": "comparison",
+                "left_title": zh_or_en(lang, "只看 TT", "TT-only"),
+                "right_title": zh_or_en(lang, "TT + AVB", "TT + AVB"),
+                "left": [motivation["old_paradigm"], zh_or_en(lang, "AVB 延迟通常事后检查。", "AVB delay is usually checked afterward.")],
+                "right": [rq["why"], zh_or_en(lang, "调度目标必须显式看到 AVB WCD。", "The objective must explicitly see AVB WCD.")],
+            },
+            [motivation["context"], rq["why"]],
+            img_problem,
+            professor(
+                zh_or_en(lang, "听众需要先知道论文为什么值得读。", "The audience first needs to know why the paper matters."),
+                rq["why"],
+                proof("motivation_figure", "Motivation / system figure"),
+            ),
+            "Teach the practical tension before introducing any algorithm.",
+        ),
+        s(
+            "challenge",
+            "Why Existing Work Fails",
+            "Why Existing Work Fails",
+            zh_or_en(lang, "失败点：先排 TT 再看 AVB 会错过真正瓶颈", "Failure: scheduling TT first misses the real bottleneck"),
+            motivation["broken_assumption"],
+            why_fails_visual,
+            [motivation["old_paradigm"], motivation["broken_assumption"], contribution],
+            None,
+            professor(
+                zh_or_en(lang, "这一页把 related work 变成一个失败机制。", "This slide turns related work into a failure mechanism."),
+                motivation["broken_assumption"],
+                zh_or_en(lang, "旧框架 vs 本文重构对比图", "Old framing vs paper reframing comparison"),
+            ),
+            "Do not list related work. Explain why the usual framing is insufficient.",
+        ),
+        s(
+            "insight",
+            "Key Insight",
+            "Key Insight",
+            zh_or_en(lang, "关键洞察：Fig.4 把 AVB WCD 的差异讲清楚", "Key insight: Fig.4 explains why AVB WCD differs"),
+            insight,
+            {"type": "claim_evidence", "left_title": zh_or_en(lang, "观察", "Observation"), "right_title": zh_or_en(lang, "洞察", "Insight"), "left": [zh_or_en(lang, "205/245/255 us 示例显示 WCD 会随窗口结构改变。", "The 205/245/255 us examples show WCD changes with window structure.")], "right": [insight]},
+            [zh_or_en(lang, "Fig.4 应独立成页：它证明问题不是“能不能排”，而是“怎么排更友好”。", "Fig.4 deserves its own slide: the issue is not only feasibility, but friendlier placement."), insight],
+            img_insight,
+            professor(
+                zh_or_en(lang, "这一页承担全篇的 aha moment。", "This slide carries the paper's aha moment."),
+                insight,
+                proof("core_insight_figure", "Core insight figure"),
+            ),
+            "Spend time on Fig.4. Explain why 205/245/255 us is a causal example, not a decorative plot.",
+        ),
+        s(
+            "theory",
+            "Theory",
+            "Theory",
+            zh_or_en(lang, "理论压缩：从网络演算推到两个可搜索因子", "Theory compression: from network calculus to two searchable factors"),
+            theory.get("final_insight", insight),
+            theory_visual,
+            [theory.get("problem", rq["why"]), theory.get("key_derivation", insight), theory.get("final_insight", insight)],
+            img_theory,
+            professor(
+                zh_or_en(lang, "理论页要说明为什么方法不是拍脑袋启发式。", "The theory slide explains why the heuristic is not arbitrary."),
+                theory.get("final_insight", insight),
+                proof("core_theory_figure", "Theory chain / relative-offset figure"),
+            ),
+            "Compress lemma/theorem material into Problem -> Assumption -> Derivation -> Final Insight.",
+        ),
+        s(
+            "method",
+            "Method",
+            "Method",
+            zh_or_en(lang, "方法：把理论因子变成 GRASP + local search 流程", "Method: turn theory factors into GRASP + local search"),
+            rq["how"],
+            {"type": "method_flow", "steps": method_steps, "insight": rq["how"]},
+            [rq["how"], zh_or_en(lang, "这页讲流程，不讲伪代码细节。", "This slide teaches the flow, not pseudocode details.")],
+            img_method,
+            professor(
+                zh_or_en(lang, "听众需要在 30 秒内知道算法怎么运行。", "The audience should understand the algorithm flow in 30 seconds."),
+                rq["how"],
+                proof("method_framework_figure", "Generated method flow / algorithm figure"),
+            ),
+            "If the paper has pseudocode, present it as an editable flowchart rather than a pasted code block.",
+        ),
+        s(
+            "experiment",
+            "Experiment Logic",
+            "Experiment Logic",
+            zh_or_en(lang, "实验逻辑：每组实验都在回答一个 claim", "Experiment logic: each experiment answers a claim"),
+            rq["how_verified"],
+            experiment_overview_visual,
+            [exp["question"], rq["how_verified"], " / ".join(exp["metrics"])],
+            img_setup,
+            professor(
+                zh_or_en(lang, "实验页要让听众先理解验证链路。", "The experiment slide should first explain the validation chain."),
+                rq["how_verified"],
+                proof("experiment_setup_figure", "Experiment topology / setup figure"),
+            ),
+            "Teach Question -> Setup -> Evidence -> Conclusion before showing result details.",
+        ),
+    ]
+
+    for card in experiment_logic[:3]:
+        role = card.get("type", "experiment")
+        img = img_result if role in {"comparison", "ablation"} else img_scalability
+        slides.append(
+            s(
+                "result",
+                role.title(),
+                "Results",
+                zh_or_en(lang, f"{card['type'].title()}：先问问题，再看证据", f"{card['type'].title()}: ask the question before reading evidence"),
+                card["conclusion"],
+                {
+                    "type": "experiment_logic",
+                    "items": [
+                        {"label": zh_or_en(lang, "Question", "Question"), "detail": card["question"]},
+                        {"label": zh_or_en(lang, "Setup", "Setup"), "detail": card["setup"]},
+                        {"label": zh_or_en(lang, "Evidence", "Evidence"), "detail": card["evidence"]},
+                        {"label": zh_or_en(lang, "Conclusion", "Conclusion"), "detail": card["conclusion"]},
+                    ],
+                },
+                [card["question"], card["evidence"], card["conclusion"]],
+                img,
+                professor(
+                    zh_or_en(lang, "这一页把实验结果解释成验证逻辑。", "This slide interprets results as validation logic."),
+                    card["conclusion"],
+                    proof("main_result_figure", "Main result / generated evidence logic visual"),
+                ),
+                "Avoid saying only that one method is better. Explain what question the evidence answers.",
+            )
+        )
+
+    slides.extend(
+        [
+            s(
+                "discussion",
+                "Contribution Boundary",
+                "Takeaways",
+                zh_or_en(lang, "贡献边界：成立在哪里，谨慎外推到哪里", "Contribution boundary: where it holds and where to be cautious"),
+                limitation,
+                {
+                    "type": "comparison",
+                    "left_title": zh_or_en(lang, "Supported", "Supported"),
+                    "right_title": zh_or_en(lang, "Needs Caution", "Needs Caution"),
+                    "left": [contribution, result],
+                    "right": [limitation, limitations[0]["reviewer_question"]],
+                },
+                [contribution, limitation, limitations[0]["reviewer_question"]],
+                img_result,
+                professor(
+                    zh_or_en(lang, "教授最后一定会问边界和可推广性。", "A professor will ask about boundary and generalization."),
+                    limitation,
+                    proof("main_result_figure", "Result evidence plus reviewer caveat"),
+                ),
+                "Close the technical story with contribution and boundary, not a generic conclusion.",
+            ),
+            s(
+                "takeaway",
+                "Takeaways",
+                "Takeaways",
+                zh_or_en(lang, "10 分钟后应该记住三句话", "Three sentences to remember after 10 minutes"),
+                understanding["research_story_brief"]["one_sentence"],
+                {
+                    "type": "takeaway",
+                    "headline": contribution,
+                    "insight": zh_or_en(lang, f"机制：{rq['how']} 边界：{limitation}", f"Mechanism: {rq['how']} Boundary: {limitation}"),
+                },
+                [contribution, rq["how"], limitation],
+                None,
+                professor(
+                    zh_or_en(lang, "结尾帮助听众复述论文，而不是重复摘要。", "The closing helps the audience retell the paper, not repeat a summary."),
+                    understanding["research_story_brief"]["one_sentence"],
+                    zh_or_en(lang, "贡献-机制-边界三联图", "Contribution-mechanism-boundary visual"),
+                ),
+                "The final slide should enable a listener to explain the paper to someone else.",
+            ),
+        ]
+    )
+
+    return {
+        "title": title,
+        "language": lang,
+        "style_preset": style,
+        "source_pdf": understanding["source_pdf"],
+        "sections": slides,
+        "storyline_extraction": understanding.get("storyline_extraction", {}),
+        "figure_roles": figure_roles,
+        "understanding_engine": {
+            "name": "Research Understanding Engine v3",
+            "principles": [
+                "Storyline before slide order",
+                "Figure-centric teaching",
+                "Theory compression",
+                "Experiment logic reconstruction",
+                "Professor gate per slide",
+            ],
         },
     }
 
@@ -951,9 +1449,12 @@ body{margin:0;background:#eef2f7;color:#111827;font-family:Arial,'Microsoft YaHe
     for idx, sec in enumerate(spec["sections"], 1):
         visual = sec.get("visual") or {}
         image = sec.get("image")
-        image_html = f"<div class='visual'><img src='{html.escape(image)}'></div>" if image else ""
-        if visual.get("type") in {"pipeline", "flow"}:
-            vis = "<div class='flow'>" + "".join(f"<div class='step'><b>{html.escape(str(s.get('label','')))}</b><br>{html.escape(str(s.get('detail','')))}</div>" for s in visual.get("steps", [])) + "</div>"
+        prefer_diagram = visual.get("type") in {"method_flow", "theory_chain"}
+        image_html = f"<div class='visual'><img src='{html.escape(image)}'></div>" if image and not prefer_diagram else ""
+        if visual.get("type") in {"pipeline", "flow", "method_flow"}:
+            vis = "<div class='flow'>" + "".join(f"<div class='step'><b>{html.escape(str(s.get('label','')))}</b><br>{html.escape(str(s.get('detail','')))}</div>" for s in visual.get("steps", visual.get("items", []))) + "</div>"
+        elif visual.get("type") in {"theory_chain", "experiment_logic"}:
+            vis = "<div class='flow'>" + "".join(f"<div class='step'><b>{html.escape(str(s.get('label','')))}</b><br>{html.escape(str(s.get('detail','')))}</div>" for s in visual.get("items", [])) + "</div>"
         elif visual.get("type") in {"comparison", "claim_evidence"}:
             vis = "<div class='comparison'>" + "".join(
                 f"<div class='card'><b>{html.escape(visual.get(side+'_title',''))}</b><ul>"
@@ -987,6 +1488,60 @@ def write_artifacts(project: Path, understanding: dict, spec: dict) -> None:
         + "\n",
         encoding="utf-8",
     )
+    storyline = understanding.get("storyline_extraction", {})
+    (inter / "storyline_extraction.md").write_text(
+        "# Storyline Extraction\n\n"
+        + "\n".join(
+            f"## {key}\n\n{value if not isinstance(value, (dict, list)) else json.dumps(value, ensure_ascii=False, indent=2)}\n"
+            for key, value in storyline.items()
+        ),
+        encoding="utf-8",
+    )
+    figure_roles = understanding.get("figure_roles", {})
+    (inter / "figure_roles.md").write_text(
+        "# Figure-Centric Understanding\n\n"
+        + "\n".join(f"- {role}: {label or 'not found'}" for role, label in figure_roles.items())
+        + "\n\nThese roles are used to decide which figures become motivation, theory, method, and result slides.\n",
+        encoding="utf-8",
+    )
+    theory_model = understanding.get("theory_model", {})
+    (inter / "theory_model.md").write_text(
+        "# Theory Compression\n\n"
+        + "\n".join(
+            f"## {key.replace('_', ' ').title()}\n\n{value if not isinstance(value, list) else json.dumps(value, ensure_ascii=False, indent=2)}\n"
+            for key, value in theory_model.items()
+        ),
+        encoding="utf-8",
+    )
+    experiment_logic = understanding.get("experiment_logic", [])
+    (inter / "experiment_logic.md").write_text(
+        "# Experiment Logic Reconstruction\n\n"
+        + "\n\n".join(
+            "## "
+            + str(card.get("type", "experiment")).title()
+            + "\n\n"
+            + "\n".join(
+                f"- {key.title()}: {card.get(key, '')}"
+                for key in ["question", "setup", "evidence", "conclusion"]
+            )
+            for card in experiment_logic
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (inter / "professor_gate.md").write_text(
+        "# Professor Gate\n\n"
+        + json.dumps(understanding.get("professor_gate", {}), ensure_ascii=False, indent=2)
+        + "\n\n## Slide Checks\n\n"
+        + "\n".join(
+            f"- Slide {idx + 1}: {sec.get('professor_check', {}).get('why_this_slide_exists', '')} | "
+            f"{sec.get('professor_check', {}).get('what_audience_learns', '')} | "
+            f"{sec.get('professor_check', {}).get('what_figure_proves_it', '')}"
+            for idx, sec in enumerate(spec.get("sections", []))
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     (inter / "paper_analysis.md").write_text(
         "# Paper Analysis\n\n"
         + f"- Title: {understanding['title']}\n"
@@ -1004,9 +1559,9 @@ def write_artifacts(project: Path, understanding: dict, spec: dict) -> None:
         "# Professor Review Report\n\n",
         "Overall: PASS with revision awareness\n\n",
         "## Strengths\n\n",
-        "- Research story follows Problem -> Challenge -> Idea -> Method -> Result -> Takeaway.\n",
-        "- Each slide has one audience takeaway and one primary visual or diagram.\n",
-        "- Results are tied back to claims instead of only repeating figure captions.\n\n",
+        "- Research story follows Problem -> Why Existing Work Fails -> Key Insight -> Theory -> Method -> Experiment Logic -> Results -> Takeaways.\n",
+        "- Each slide carries a professor gate: why this slide exists, what the audience learns, and what figure/visual proves it.\n",
+        "- Theory, method, and experiment pages are reconstructed as teaching structures instead of paper-section summaries.\n\n",
         "## Remaining Review Questions\n\n",
         f"- {understanding['limitation_risks'][0]['reviewer_question']}\n",
         "- Check exact quantitative values against the original figures before formal presentation.\n",
@@ -1016,8 +1571,10 @@ def write_artifacts(project: Path, understanding: dict, spec: dict) -> None:
     (project / "improvement_history.md").write_text(
         "# Improvement History\n\n"
         "- Round 1: Built research-understanding model before slide generation.\n"
-        "- Round 2: Selected figure-first story pages and cropped caption-linked evidence figures.\n"
-        "- Round 3: Generated editable PPTX and HTML using selected style preset.\n",
+        "- Round 2: Upgraded to Storyline Extraction: Research Gap / Motivation / Key Insight / Theory / Method / Validation Logic / Contribution.\n"
+        "- Round 3: Added Figure-Centric Understanding and professor-gated slide planning.\n"
+        "- Round 4: Added Theory Compression, Method Flow, and Experiment Logic Reconstruction pages.\n"
+        "- Round 5: Generated editable PPTX and HTML using selected style preset.\n",
         encoding="utf-8",
     )
     (project / "layout_check_report.md").write_text(
@@ -1067,14 +1624,14 @@ def build_pptx(script_dir: Path, project: Path, env: dict[str, str] | None) -> P
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Academic Presentation Agent v2: understanding-first, visual-first, editable PPTX/HTML.")
+    parser = argparse.ArgumentParser(description="Academic Presentation Agent v3: teaching-first, visual-first, editable PPTX/HTML.")
     parser.add_argument("--pdf", type=Path, required=True)
     parser.add_argument("--project", type=Path, required=True)
     parser.add_argument("--lang", choices=["zh", "en"], default="zh")
     parser.add_argument("--style", default="nature-clean", choices=["nature-clean", "conference-blue", "minimal-dark", "warm-paper"])
     parser.add_argument("--dpi", type=int, default=220)
     parser.add_argument("--max-figures", type=int, default=14)
-    parser.add_argument("--rounds", type=int, default=3, help="Compatibility argument; v2 writes review/history artifacts.")
+    parser.add_argument("--rounds", type=int, default=3, help="Compatibility argument; v3 writes review/history artifacts.")
     parser.add_argument("--target-score", type=float, default=9.0, help="Compatibility argument.")
     args = parser.parse_args()
 

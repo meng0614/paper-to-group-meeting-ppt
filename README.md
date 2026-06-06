@@ -4,15 +4,15 @@ Generate a high-quality academic group-meeting HTML report and editable PowerPoi
 
 This skill is a general Academic Presentation Agent. It is not tied to any specific discipline. It can be used for systems, networking, AI, medicine, biology, social science, and other academic papers.
 
-The default v2 workflow:
+The default v3 workflow:
 
 ```text
-Research Understanding Engine v2 -> Nature-style research story model -> enhanced caption-aware figure extraction -> visual storyboard / style preset -> HTML report + editable PPTX -> layout / figure validators -> professor review artifacts
+Research Understanding Engine v3 -> Storyline Extraction -> Figure-Centric Understanding -> Theory/Method/Experiment Teaching Pages -> enhanced caption-aware figure extraction -> HTML report + editable PPTX -> layout / figure validators -> professor review artifacts
 ```
 
 It does not only summarize a paper. The default strategy is **Presentation-first / Visual-first**: every section starts with Story Phase, One Message, 5-second takeaway, Visual, and Content. The report should help someone who has not read the paper understand the motivation, problem, core idea, why it works, and whether experiments support it in 10-15 minutes.
 
-The v2 generator borrows the strongest ideas from Nature-style paper presentation skills: build the research story before slides, explain Why / What / How / Why Effective / How Verified, bind results to claims, and close with contribution, mechanism, and boundary. It also tries to improve figure handling: figures are rendered at high DPI, located from caption bounding boxes, trimmed to the visual content, padded, upscaled when needed, and checked with a figure-quality report.
+The v3 generator borrows the strongest ideas from Nature-style paper presentation skills: build the research story before slides, explain Why / What / How / Why Effective / How Verified, bind results to claims, and close with contribution, mechanism, and boundary. It now adds teaching-first research understanding: Research Gap / Motivation / Key Insight / Theory / Method / Validation Logic / Contribution are extracted before slide design; figures are assigned roles such as motivation figure, core theory figure, method framework figure, and main result figure. Figure extraction still renders at high DPI, locates caption-linked regions, trims to visual content, pads, upscales when needed, and writes a figure-quality report.
 
 The design philosophy is:
 
@@ -21,7 +21,7 @@ One Slide One Message
 Visual First: visual subject area >= 40%
 Visual Hierarchy: title > visual > explanation
 Whitespace First
-Story First: Problem -> Challenge -> Idea -> Method -> Result -> Takeaway
+Story First: Problem -> Why Existing Work Fails -> Key Insight -> Theory -> Method -> Experiment Logic -> Results -> Takeaways
 Audience First: what should the audience remember in 5 seconds?
 Layout Quality: add pages instead of crowding content
 ```
@@ -71,6 +71,11 @@ paper_ppt_project/
     result_to_claim_matrix.json
     limitation_risks.json
     research_story_brief.md
+    storyline_extraction.md
+    figure_roles.md
+    theory_model.md
+    experiment_logic.md
+    professor_gate.md
     understanding_review.md
     paper_analysis.md
     figures_index.md
@@ -95,6 +100,11 @@ paper_ppt_project/
 ## Skill Capabilities
 
 - Build a Research Understanding Engine output before slide design: Why / What / How / Why Effective / How Verified.
+- Reconstruct the paper as a teaching storyline: Research Gap, Motivation, Key Insight, Theory, Method, Validation Logic, and Contribution.
+- Identify figure roles: Motivation Figure, Core Theory Figure, Method Framework Figure, Main Result Figure, setup/evidence figures, and table evidence.
+- Compress theory sections with Lemma/Theorem/Corollary cues into Problem -> Assumption -> Key Derivation -> Final Insight.
+- Convert method descriptions into visual flows such as Input -> Theory Factors -> Objective -> GRASP Search -> Local Search -> Output.
+- Reconstruct experiment logic as Question -> Setup -> Evidence -> Conclusion for ablation, comparison, and scalability.
 - Understand the paper structure: problem, motivation, method, experiments, results, limitations.
 - Extract a motivation chain, related-work gap, contribution cards, method model, result-to-claim matrix, and reviewer caveats.
 - Create a visual storyboard with Story Phase / One Message / 5-second takeaway / Visual / Content for every slide.
@@ -119,7 +129,7 @@ paper_ppt_project/
 
 ```text
 scripts/render_pdf_pages.py       Render PDF pages to PNG with pdftoppm at PPT-readable DPI.
-scripts/build_research_understanding.py Build source-grounded Research Understanding Engine v2 artifacts.
+scripts/build_research_understanding.py Build source-grounded Research Understanding Engine v3 artifacts.
 scripts/extract_reference_design_philosophy.py Learn reference PPT layout philosophy without copying colors/fonts.
 scripts/crop_pdf_figures_by_caption.py Caption-aware figure cropper using pdftotext bbox coordinates.
 scripts/crop_pdf_regions.py       Manual clean-box cropper with padding, trimming, and upscaling.
@@ -330,7 +340,7 @@ Each section in `slide_specs.json` should include:
 Visual-first rules:
 
 - Do not copy the reference PPT's colors or fonts.
-- Build the deck as Problem -> Challenge -> Idea -> Method -> Result -> Takeaway.
+- Build the deck as Problem -> Why Existing Work Fails -> Key Insight -> Theory -> Method -> Experiment Logic -> Results -> Takeaways.
 - Every slide should have one message and one visual center.
 - The visual subject should occupy at least 40% of the page.
 - Background slides should use scenario/system/statistics visuals, not text only.

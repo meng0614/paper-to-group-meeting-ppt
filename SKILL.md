@@ -10,7 +10,7 @@ Create a general Academic Presentation Agent for arbitrary research papers. Do n
 The skill's core promise is:
 
 ```text
-Research Understanding Engine v2 -> Nature-style research story model -> enhanced caption-aware figure extraction -> visual storyboard / style preset -> HTML report + editable PPTX -> layout / figure validators -> professor review artifacts
+Research Understanding Engine v3 -> Storyline Extraction -> Figure-Centric Understanding -> Theory/Method/Experiment Teaching Pages -> enhanced caption-aware figure extraction -> HTML report + editable PPTX -> layout / figure validators -> professor review artifacts
 ```
 
 The output should be a usable HTML report for a human presenter, not merely a paper summary.
@@ -19,7 +19,7 @@ The default strategy is **Presentation-first / Visual-first**, not Text-first. A
 
 ```text
 Story Phase:
-Problem / Challenge / Idea / Method / Result / Takeaway
+Problem / Why Existing Work Fails / Key Insight / Theory / Method / Experiment Logic / Results / Takeaways
 
 One Message:
 The single core claim of this slide.
@@ -36,7 +36,7 @@ What minimal text is needed to support that visual?
 
 Only after these three fields are clear should the section be rendered.
 
-The current default generator is v2. It learns from Nature-style paper presentation skills: understand the paper first, then design the talk. It must explicitly answer Why, What, How, Why Effective, and How Verified before rendering slides. It should also outperform generic paper-to-PPT tools on figure handling by using caption-linked high-DPI crops, trimming, padding, upscaling, a contact sheet, and `figure_quality_report.md`.
+The current default generator is v3. It learns from Nature-style paper presentation skills: understand the paper first, then design the talk. It must explicitly answer Why, What, How, Why Effective, and How Verified before rendering slides. It then reconstructs the paper as a teaching storyline: Research Gap, Motivation, Key Insight, Theory, Method, Validation Logic, and Contribution. It should also outperform generic paper-to-PPT tools on figure handling by using caption-linked high-DPI crops, trimming, padding, upscaling, a contact sheet, and `figure_quality_report.md`.
 
 Hard design principles:
 
@@ -44,7 +44,7 @@ Hard design principles:
 - Visual First: every non-cover slide must have a visual subject occupying at least 40% of the page.
 - Visual Hierarchy: title > visual > explanation.
 - Whitespace First: do not fill empty space with text.
-- Story First: organize the deck as Problem -> Challenge -> Idea -> Method -> Result -> Takeaway, not by paper section order.
+- Story First: organize the deck as Problem -> Why Existing Work Fails -> Key Insight -> Theory -> Method -> Experiment Logic -> Results -> Takeaways, not by paper section order.
 - Audience First: every slide must answer the 5-second takeaway question.
 - Layout Quality: add pages instead of compressing content.
 
@@ -112,6 +112,11 @@ paper_ppt_project/
     why_effective.md
     experiment_cards.json
     result_to_claim_matrix.json
+    storyline_extraction.md
+    figure_roles.md
+    theory_model.md
+    experiment_logic.md
+    professor_gate.md
     understanding_review.md
     paper_analysis.md
     figures_index.md
@@ -224,6 +229,11 @@ intermediate/experiment_cards.json
 intermediate/result_to_claim_matrix.json
 intermediate/limitation_risks.json
 intermediate/research_story_brief.md
+intermediate/storyline_extraction.md
+intermediate/figure_roles.md
+intermediate/theory_model.md
+intermediate/experiment_logic.md
+intermediate/professor_gate.md
 intermediate/understanding_review.md
 ```
 
@@ -231,6 +241,7 @@ The engine must answer:
 
 ```text
 Why -> What -> How -> Why Effective -> How Verified
+Storyline -> Figure Roles -> Theory Compression -> Experiment Logic
 ```
 
 Only then produce `intermediate/paper_analysis.md` and slide specs with:

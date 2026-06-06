@@ -256,7 +256,7 @@ def architecture_report(original: list[dict], planned: list[dict]) -> str:
     lines.append(f"- Original slide count: {len(original)}\n")
     lines.append(f"- Planned slide count: {len(planned)}\n")
     lines.append("- Rule: prefer adding pages over shrinking fonts.\n")
-    lines.append("- Story order: Problem -> Challenge -> Idea -> Method -> Result -> Takeaway.\n")
+    lines.append("- Story order: Problem -> Why Existing Work Fails -> Key Insight -> Theory -> Method -> Experiment Logic -> Results -> Takeaways.\n")
     lines.append("- Design rule: one slide one message; visual subject area target >= 40%.\n\n")
     for idx, slide in enumerate(planned, 1):
         cap = capacity_for(slide)

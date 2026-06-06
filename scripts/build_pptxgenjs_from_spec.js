@@ -192,28 +192,34 @@ function addBullets(slide, bullets, x, y, w, h, style, fontSize = 14.5) {
 }
 
 function addStepVisual(pptx, slide, visual, x, y, w, h, style) {
-  const steps = (visual.steps || []).slice(0, 4);
+  const steps = (visual.steps || visual.items || []).slice(0, visual.type === "method_flow" ? 6 : 4);
   const gap = 0.12;
-  const bw = (w - gap * (steps.length - 1)) / Math.max(1, steps.length);
+  const cols = steps.length > 4 ? 3 : Math.max(1, steps.length);
+  const rows = Math.ceil(steps.length / cols);
+  const bw = (w - gap * (cols - 1)) / cols;
+  const bh = (h - gap * (rows - 1)) / rows;
   steps.forEach((step, i) => {
-    const sx = x + i * (bw + gap);
-    const highlighted = i === steps.length - 1 && visual.type === "pipeline";
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const sx = x + col * (bw + gap);
+    const sy = y + row * (bh + gap);
+    const highlighted = i === steps.length - 1 && ["pipeline", "method_flow"].includes(visual.type);
     slide.addShape(pptx.ShapeType.roundRect, {
       x: sx,
-      y,
+      y: sy,
       w: bw,
-      h,
+      h: bh,
       rectRadius: 0.04,
       fill: { color: highlighted ? style.accent : style.light },
       line: { color: highlighted ? style.accent : "D9E2EC" },
     });
     slide.addText(safeText(step.label), {
       x: sx + 0.12,
-      y: y + 0.18,
+      y: sy + 0.14,
       w: bw - 0.24,
-      h: 0.38,
+      h: 0.32,
       fontFace: style.font,
-      fontSize: 12.5,
+      fontSize: steps.length > 4 ? 10.8 : 12.5,
       bold: true,
       color: highlighted ? "FFFFFF" : style.primary,
       fit: "shrink",
@@ -221,18 +227,106 @@ function addStepVisual(pptx, slide, visual, x, y, w, h, style) {
     });
     slide.addText(safeText(step.detail), {
       x: sx + 0.12,
-      y: y + 0.7,
+      y: sy + 0.55,
       w: bw - 0.24,
-      h: h - 0.86,
+      h: bh - 0.68,
       fontFace: style.font,
-      fontSize: 10.8,
+      fontSize: steps.length > 4 ? 8.7 : 10.8,
       color: highlighted ? "FFFFFF" : style.body,
       fit: "shrink",
       margin: 0,
     });
-    if (i < steps.length - 1) {
+    if (i < steps.length - 1 && col < cols - 1) {
+      slide.addText("→", { x: sx + bw - 0.03, y: sy + bh / 2 - 0.16, w: 0.2, h: 0.22, fontFace: "Arial", fontSize: 16, bold: true, color: style.accent, margin: 0 });
+    }
+  });
+}
+
+function addTheoryChain(pptx, slide, visual, x, y, w, h, style) {
+  const items = (visual.items || []).slice(0, 4);
+  const gap = 0.16;
+  const bw = (w - gap * 3) / 4;
+  items.forEach((item, i) => {
+    const sx = x + i * (bw + gap);
+    const isFinal = i === items.length - 1;
+    slide.addShape(pptx.ShapeType.roundRect, {
+      x: sx,
+      y,
+      w: bw,
+      h,
+      rectRadius: 0.04,
+      fill: { color: isFinal ? style.accent : style.light },
+      line: { color: isFinal ? style.accent : "D9E2EC" },
+    });
+    slide.addText(safeText(item.label), {
+      x: sx + 0.13,
+      y: y + 0.18,
+      w: bw - 0.26,
+      h: 0.34,
+      fontFace: style.font,
+      fontSize: 11.8,
+      bold: true,
+      color: isFinal ? "FFFFFF" : style.primary,
+      fit: "shrink",
+      margin: 0,
+    });
+    slide.addText(safeText(item.detail), {
+      x: sx + 0.13,
+      y: y + 0.68,
+      w: bw - 0.26,
+      h: h - 0.82,
+      fontFace: style.font,
+      fontSize: 9.6,
+      color: isFinal ? "FFFFFF" : style.body,
+      fit: "shrink",
+      margin: 0,
+    });
+    if (i < items.length - 1) {
       slide.addText("→", { x: sx + bw - 0.03, y: y + h / 2 - 0.16, w: 0.2, h: 0.22, fontFace: "Arial", fontSize: 16, bold: true, color: style.accent, margin: 0 });
     }
+  });
+}
+
+function addExperimentLogic(pptx, slide, visual, x, y, w, h, style) {
+  const items = (visual.items || []).slice(0, 4);
+  const gap = 0.16;
+  const cw = (w - gap) / 2;
+  const ch = (h - gap) / 2;
+  items.forEach((item, i) => {
+    const sx = x + (i % 2) * (cw + gap);
+    const sy = y + Math.floor(i / 2) * (ch + gap);
+    slide.addShape(pptx.ShapeType.roundRect, {
+      x: sx,
+      y: sy,
+      w: cw,
+      h: ch,
+      rectRadius: 0.04,
+      fill: { color: style.light },
+      line: { color: "D9E2EC" },
+    });
+    slide.addText(safeText(item.label), {
+      x: sx + 0.16,
+      y: sy + 0.12,
+      w: cw - 0.32,
+      h: 0.3,
+      fontFace: style.font,
+      fontSize: 11.5,
+      bold: true,
+      color: style.accent,
+      fit: "shrink",
+      margin: 0,
+    });
+    slide.addText(safeText(item.detail), {
+      x: sx + 0.16,
+      y: sy + 0.52,
+      w: cw - 0.32,
+      h: ch - 0.62,
+      fontFace: style.font,
+      fontSize: 9.8,
+      color: style.body,
+      fit: "shrink",
+      margin: 0,
+    });
   });
 }
 
@@ -265,12 +359,16 @@ function addTakeawayVisual(pptx, slide, visual, x, y, w, h, style) {
 
 function addVisual(pptx, slide, sec, imagePath, x, y, w, h, style) {
   const visual = sec.visual || {};
-  if (imagePath && fs.existsSync(imagePath)) {
+  if (imagePath && fs.existsSync(imagePath) && !["method_flow", "theory_chain"].includes(visual.type)) {
     addImage(slide, imagePath, x, y, w, h);
     return;
   }
-  if (["pipeline", "flow"].includes(visual.type)) {
+  if (["pipeline", "flow", "method_flow"].includes(visual.type)) {
     addStepVisual(pptx, slide, visual, x, y, w, h, style);
+  } else if (visual.type === "theory_chain") {
+    addTheoryChain(pptx, slide, visual, x, y, w, h, style);
+  } else if (visual.type === "experiment_logic") {
+    addExperimentLogic(pptx, slide, visual, x, y, w, h, style);
   } else if (["comparison", "claim_evidence"].includes(visual.type)) {
     addComparison(pptx, slide, visual, x, y, w, h, style);
   } else {
@@ -281,7 +379,9 @@ function addVisual(pptx, slide, sec, imagePath, x, y, w, h, style) {
 function chooseLayout(sec, idx) {
   const type = (sec.visual && sec.visual.type) || "";
   if (sec.kind === "cover") return "cover";
+  if (["method_flow", "theory_chain"].includes(type)) return "top-diagram";
   if (["pipeline", "flow"].includes(type) && !sec.image) return "top-diagram";
+  if (type === "experiment_logic" && !sec.image) return "top-diagram";
   if (["comparison", "claim_evidence"].includes(type) && !sec.image) return "top-diagram";
   if (sec.kind === "result" || sec.kind === "insight") return "visual-top";
   if (sec.kind === "takeaway" || sec.kind === "discussion") return "visual-top";
